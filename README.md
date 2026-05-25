@@ -97,19 +97,20 @@ Expand the product from a single-task execution agent into one that can decompos
 
 - [Public docs index](public-docs/README.md)
 - [Install and configure](public-docs/install-and-configure.md)
-- [Main design](public-docs/design11.md)
-- [Roadmap](public-docs/project_roadmap_2026-05-19.md)
-- [User interaction design](public-docs/module_user_interaction_design11.md)
-- [Execution runtime design](public-docs/module_execution_runtime_design11.md)
-- [Safety boundary design](public-docs/module_safety_boundary_design11.md)
+- [Main design](public-docs/main-design.md)
+- [Roadmap](public-docs/roadmap.md)
+- [User interaction design](public-docs/user-interaction-design.md)
+- [Execution runtime design](public-docs/execution-runtime-design.md)
+- [Safety boundary design](public-docs/safety-boundary-design.md)
 
-## Licensing direction
+## License
 
-The final public license text has not been published yet.
+This repository is licensed under the Business Source License 1.1 (`BUSL-1.1`).
 
-The current direction is source-available rather than fully open-source in the strict OSI sense:
+In practical terms:
 
-- individual developers, learning use, and personal projects should stay low-friction;
-- organizational reuse, commercial integration, and productization should require a separate commercial license.
+- individual developers can use the project for learning, research, evaluation, and personal projects under the license terms;
+- the Additional Use Grant also permits individual personal production use when the user is not acting for or on behalf of an organization;
+- production use by or for an organization, and commercial reuse of the Licensed Work as a product or hosted service, requires a separate commercial license from the Licensor.
 
-The final README, LICENSE, and commercial licensing notes will be finalized together.
+See [LICENSE](LICENSE) for the controlling terms.

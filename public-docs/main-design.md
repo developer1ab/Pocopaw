@@ -64,10 +64,10 @@ At a high level, the current flow is:
 
 The public documentation surface keeps these entry points:
 
-- `design11.md`
-- `project_roadmap_2026-05-19.md`
-- `module_user_interaction_design11.md`
-- `module_execution_runtime_design11.md`
-- `module_safety_boundary_design11.md`
+- `main-design.md`
+- `roadmap.md`
+- `user-interaction-design.md`
+- `execution-runtime-design.md`
+- `safety-boundary-design.md`
 
 The rest of the internal module breakdown remains in the local working documentation set.
