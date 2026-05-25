@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="sand_50">#FFF7F0</color>
+    <color name="sand_100">#F1E2D2</color>
+    <color name="clay_500">#C2603E</color>
+    <color name="clay_700">#8E4027</color>
+    <color name="moss_500">#506A4E</color>
+    <color name="foam_200">#CFE3DB</color>
+    <color name="ink_900">#211B18</color>
+    <color name="slate_500">#756B61</color>
+    <color name="paper_0">#FFFFFBF6</color>
+    <color name="panel_0">#FFFDF9</color>
+    <color name="bubble_user">#F6D89B</color>
+    <color name="bubble_assistant">#FFECDD</color>
+    <color name="bubble_system">#DEE9E0</color>
+    <color name="success_500">#3C6E47</color>
+    <color name="warning_500">#A45D1D</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="black">#FF000000</color>
+</resources>

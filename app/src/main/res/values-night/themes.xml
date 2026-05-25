@@ -1,0 +1,16 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.Pocopaw" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/clay_500</item>
+        <item name="colorPrimaryVariant">@color/clay_700</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorSecondary">@color/foam_200</item>
+        <item name="colorSecondaryVariant">@color/moss_500</item>
+        <item name="colorOnSecondary">@color/ink_900</item>
+        <item name="android:windowBackground">@color/paper_0</item>
+        <item name="colorSurface">@color/panel_0</item>
+        <item name="colorOnSurface">@color/ink_900</item>
+        <item name="colorError">@color/warning_500</item>
+        <item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
+        <item name="android:navigationBarColor">@color/paper_0</item>
+    </style>
+</resources>

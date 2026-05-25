@@ -1,0 +1,115 @@
+import java.util.Properties
+
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+def readPrototypeProperty = { Object keyOrKeys, String fallbackValue = "" ->
+    def keys = keyOrKeys instanceof Collection ? keyOrKeys : [keyOrKeys]
+    def candidates = [
+            rootProject.file("local.properties")
+    ]
+    for (def file : candidates) {
+        if (!file.exists()) {
+            continue
+        }
+        def properties = new Properties()
+        file.withInputStream { stream ->
+            properties.load(stream)
+        }
+        for (def key : keys) {
+            def value = properties.getProperty(key)
+            if (value != null && !value.trim().isEmpty()) {
+                return value.trim()
+            }
+        }
+    }
+    return fallbackValue
+}
+
+def asBuildConfigString = { String value ->
+    return '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
+}
+
+android {
+    namespace 'com.atombits.pocopaw'
+    compileSdk 33
+    buildToolsVersion '35.0.0'
+
+    defaultConfig {
+        applicationId "com.atombits.pocopaw"
+        minSdk 26
+        targetSdk 33
+        versionCode 1
+        versionName "1.0"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField "String", "DEEPSEEK_API_KEY", asBuildConfigString(readPrototypeProperty(["DEEPSEEK_API_KEY"]))
+        buildConfigField "String", "DEEPSEEK_MODEL", asBuildConfigString(readPrototypeProperty(["DEEPSEEK_MODEL"], "deepseek-v4-flash"))
+        buildConfigField "String", "DEEPSEEK_MODEL_FAST", asBuildConfigString(readPrototypeProperty(["DEEPSEEK_MODEL_FAST"], "deepseek-v4-flash"))
+        buildConfigField "String", "DEEPSEEK_MODEL_EXPERT", asBuildConfigString(readPrototypeProperty(["DEEPSEEK_MODEL_EXPERT"], "deepseek-v4-pro"))
+        buildConfigField "String", "DEEPSEEK_ENDPOINT", asBuildConfigString(readPrototypeProperty(["DEEPSEEK_ENDPOINT"], "https://api.deepseek.com/chat/completions"))
+        buildConfigField "String", "OPENAI_API_KEY", asBuildConfigString(readPrototypeProperty(["OPENAI_API_KEY"]))
+        buildConfigField "String", "OPENAI_ENDPOINT", asBuildConfigString(readPrototypeProperty(["OPENAI_ENDPOINT"], "https://api.openai.com/v1/chat/completions"))
+        buildConfigField "String", "OPENAI_MODEL", asBuildConfigString(readPrototypeProperty(["OPENAI_MODEL"], "gpt-5.4-mini"))
+        buildConfigField "String", "OPENAI_MODEL_FAST", asBuildConfigString(readPrototypeProperty(["OPENAI_MODEL_FAST"], "gpt-5.4-mini"))
+        buildConfigField "String", "OPENAI_MODEL_EXPERT", asBuildConfigString(readPrototypeProperty(["OPENAI_MODEL_EXPERT"], "gpt-5.4"))
+        buildConfigField "String", "GEMINI_API_KEY", asBuildConfigString(readPrototypeProperty(["GEMINI_API_KEY"]))
+        buildConfigField "String", "GEMINI_ENDPOINT", asBuildConfigString(readPrototypeProperty(["GEMINI_ENDPOINT"], "https://generativelanguage.googleapis.com/v1beta/models"))
+        buildConfigField "String", "GEMINI_MODEL", asBuildConfigString(readPrototypeProperty(["GEMINI_MODEL"], "gemini-3.5-flash"))
+        buildConfigField "String", "GEMINI_MODEL_FAST", asBuildConfigString(readPrototypeProperty(["GEMINI_MODEL_FAST"], "gemini-3.5-flash"))
+        buildConfigField "String", "GEMINI_MODEL_EXPERT", asBuildConfigString(readPrototypeProperty(["GEMINI_MODEL_EXPERT"], "gemini-3.1-pro-preview"))
+        buildConfigField "String", "QWEN_VISION_API_KEY", asBuildConfigString(readPrototypeProperty(["QWEN_VISION_API_KEY", "DASHSCOPE_API_KEY"]))
+        buildConfigField "String", "QWEN_VISION_MODEL_FAST", asBuildConfigString(readPrototypeProperty(["QWEN_VISION_MODEL_FAST"], "qwen3.5-plus"))
+        buildConfigField "String", "QWEN_VISION_MODEL_EXPERT", asBuildConfigString(readPrototypeProperty(["QWEN_VISION_MODEL_EXPERT"], "qwen3.6-plus"))
+        buildConfigField "String", "QWEN_VISION_MODEL", asBuildConfigString(readPrototypeProperty(["QWEN_VISION_MODEL"], "qwen3.6-plus"))
+        buildConfigField "String", "QWEN_VISION_ENDPOINT", asBuildConfigString(readPrototypeProperty(["QWEN_VISION_ENDPOINT"], "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"))
+        buildConfigField "String", "OPENSEARCH_API_KEY", asBuildConfigString(readPrototypeProperty(["OPENSEARCH_API_KEY", "ALIYUN_OPENSEARCH_API_KEY"]))
+        buildConfigField "String", "OPENSEARCH_ENDPOINT", asBuildConfigString(readPrototypeProperty(["OPENSEARCH_ENDPOINT"]))
+        buildConfigField "String", "OPENSEARCH_WORKSPACE", asBuildConfigString(readPrototypeProperty(["OPENSEARCH_WORKSPACE"]))
+        buildConfigField "String", "OPENSEARCH_SERVICE_ID", asBuildConfigString(readPrototypeProperty(["OPENSEARCH_SERVICE_ID"]))
+        buildConfigField "String", "GOOGLE_SEARCH_API_KEY", asBuildConfigString(readPrototypeProperty(["GOOGLE_SEARCH_API_KEY"]))
+        buildConfigField "String", "GOOGLE_SEARCH_ENGINE_ID", asBuildConfigString(readPrototypeProperty(["GOOGLE_SEARCH_ENGINE_ID", "GOOGLE_CSE_ID"]))
+        buildConfigField "String", "GOOGLE_SEARCH_ENDPOINT", asBuildConfigString(readPrototypeProperty(["GOOGLE_SEARCH_ENDPOINT"], "https://www.googleapis.com/customsearch/v1"))
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+    buildFeatures {
+        viewBinding true
+    }
+}
+
+dependencies {
+
+    def shizukuVersion = '13.1.5'
+
+    implementation 'androidx.core:core-ktx:1.7.0'
+    implementation 'androidx.appcompat:appcompat:1.4.2'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.4.1'
+    implementation 'androidx.recyclerview:recyclerview:1.2.1'
+    implementation 'com.google.android.material:material:1.6.1'
+    implementation 'com.squareup.okhttp3:okhttp:4.9.3'
+    implementation 'org.jsoup:jsoup:1.18.3'
+    implementation 'com.google.code.gson:gson:2.10.1'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4'
+    implementation "dev.rikka.shizuku:api:$shizukuVersion"
+    implementation "dev.rikka.shizuku:provider:$shizukuVersion"
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:4.9.3'
+    androidTestImplementation 'androidx.test.ext:junit:1.3.0'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.7.0'
+}
