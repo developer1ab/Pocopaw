@@ -14,3 +14,25 @@
 .cxx
 local.properties
 /logs/captures/
+/.venv/
+/.vscode/
+
+# Local-only working documents and release-unrelated artifacts
+/docs/
+/logs/
+/root-temp/
+/prototypedev/
+/scripts/
+/tools/
+/shizukuprobe/
+
+# Local debug outputs
+/temp_*
+/tmp_*
+/live_streaming_logcat.txt
+/route_debug_extract.txt
+/thinking_send_capture.txt
+
+# Local maintenance utilities
+/parse_json.py
+/rename_popopaw_to_pocopaw.ps1

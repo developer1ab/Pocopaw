@@ -14,4 +14,3 @@ dependencyResolutionManagement {
 }
 rootProject.name = "popopaw"
 include ':app'
-include ':shizukuprobe'
