@@ -10,6 +10,8 @@ pocopaw is an Android-based personal execution agent prototype. It is not trying
 
 The current product focus is deliberately narrow. Instead of exposing every capability at once, pocopaw is focused on making the local execution chain stable, observable, and controllable first.
 
+Quick links: [Docs](public-docs/README.md) · [Wiki](https://github.com/developer1ab/Pocopaw/wiki) · [Showcases](public-docs/showcases/README.md) · [Install](public-docs/install-and-configure.md) · [Main design](public-docs/main-design.md) · [Roadmap](public-docs/roadmap.md) · [License](LICENSE)
+
 ## What pocopaw is
 
 pocopaw is a local-first Android execution agent for personal workflows.

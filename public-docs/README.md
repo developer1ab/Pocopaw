@@ -4,6 +4,7 @@ This directory contains the curated public documentation surface for the reposit
 
 It only keeps the small set of documents that are intended to stay visible in the open publication surface:
 
+- [Showcases](showcases/README.md)
 - [Install and configure](install-and-configure.md)
 - [Main design](main-design.md)
 - [Roadmap](roadmap.md)
