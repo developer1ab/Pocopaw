@@ -6,7 +6,7 @@ Demonstrates an end-to-end path from user request to local execution writeback.
 
 ## Demo Video
 
-Video: `overall.mp4`
+Video: `overalls.mp4`
 
 ## Scenario
 

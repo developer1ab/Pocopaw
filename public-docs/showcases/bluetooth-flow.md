@@ -6,7 +6,7 @@ Demonstrates a Bluetooth-related task flow with execution feedback and final wri
 
 ## Demo Video
 
-Video: `bluetooth.mp4`
+Video: `bluetooths.mp4`
 
 ## Scenario
 

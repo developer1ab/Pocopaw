@@ -6,7 +6,7 @@ Demonstrates a shopping-oriented execution flow from chat request to outcome wri
 
 ## Demo Video
 
-Video: `shopping.mp4`
+Video: `shoppings.mp4`
 
 ## Scenario
 

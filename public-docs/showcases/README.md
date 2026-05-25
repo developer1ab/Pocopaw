@@ -28,9 +28,9 @@ Each showcase should include:
 ## Video Assets
 
 - Current uploaded videos:
-	- `overall.mp4`
-	- `shopping.mp4`
-	- `bluetooth.mp4`
+	- `overalls.mp4`
+	- `shoppings.mp4`
+	- `bluetooths.mp4`
 - Store videos in `public-docs/showcases/`
 - Prefer `mp4` (H.264), 1080p, and short clips
 - Keep each file as small as practical for fast loading
