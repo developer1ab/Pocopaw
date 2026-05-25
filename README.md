@@ -12,6 +12,35 @@ The current product focus is deliberately narrow. Instead of exposing every capa
 
 Quick links: [Docs](public-docs/README.md) · [Wiki](https://github.com/developer1ab/Pocopaw/wiki) · [Showcases](public-docs/showcases/README.md) · [Install](public-docs/install-and-configure.md) · [Main design](public-docs/main-design.md) · [Roadmap](public-docs/roadmap.md) · [License](LICENSE)
 
+## Watch 3 Demo Flows
+
+Start here for the fastest product impression.
+
+<table>
+	<tr>
+		<td width="33%" valign="top">
+			<strong>Overall Flow</strong><br/>
+			End-to-end path from user request to execution writeback.<br/><br/>
+			<a href="public-docs/showcases/overalls.mp4">Watch demo</a><br/>
+			<a href="public-docs/showcases/task-execution-closed-loop.md">Read walkthrough</a>
+		</td>
+		<td width="33%" valign="top">
+			<strong>Shopping Flow</strong><br/>
+			Shopping-oriented request handling with visible execution feedback.<br/><br/>
+			<a href="public-docs/showcases/shoppings.mp4">Watch demo</a><br/>
+			<a href="public-docs/showcases/shopping-flow.md">Read walkthrough</a>
+		</td>
+		<td width="33%" valign="top">
+			<strong>Bluetooth Flow</strong><br/>
+			Bluetooth task execution with completion and conversation writeback.<br/><br/>
+			<a href="public-docs/showcases/bluetooths.mp4">Watch demo</a><br/>
+			<a href="public-docs/showcases/bluetooth-flow.md">Read walkthrough</a>
+		</td>
+	</tr>
+</table>
+
+All showcase pages: [Showcase Hub](public-docs/showcases/README.md)
+
 ## What pocopaw is
 
 pocopaw is a local-first Android execution agent for personal workflows.
