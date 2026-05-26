@@ -20,26 +20,42 @@ Start here for the fastest product impression.
 	<tr>
 		<td width="33%" valign="top">
 			<strong>Overall Flow</strong><br/>
-			End-to-end path from user request to execution writeback.<br/><br/>
-			<a href="https://youtube.com/shorts/xguWAnIMgHA?feature=share">
-				<img src="https://img.youtube.com/vi/xguWAnIMgHA/hqdefault.jpg" alt="Overall Flow Demo" width="100%" style="border-radius: 26px;" />
-			</a><br/>
-			<a href="public-docs/showcases/task-execution-closed-loop.md">Read walkthrough</a>
+			End-to-end path from user request to execution writeback.
 		</td>
 		<td width="33%" valign="top">
 			<strong>Shopping Flow</strong><br/>
-			Shopping-oriented request handling with visible execution feedback.<br/><br/>
-			<a href="https://youtube.com/shorts/dCpU2XeuGb0?feature=share">
-				<img src="https://img.youtube.com/vi/dCpU2XeuGb0/hqdefault.jpg" alt="Shopping Flow Demo" width="100%" style="border-radius: 26px;" />
-			</a><br/>
-			<a href="public-docs/showcases/shopping-flow.md">Read walkthrough</a>
+			Shopping-oriented request handling with visible execution feedback.
 		</td>
 		<td width="33%" valign="top">
 			<strong>Bluetooth Flow</strong><br/>
-			Bluetooth task execution with completion and conversation writeback.<br/><br/>
-			<a href="https://youtube.com/shorts/XUT8fFkm0Fg?feature=share">
-				<img src="https://img.youtube.com/vi/XUT8fFkm0Fg/hqdefault.jpg" alt="Bluetooth Flow Demo" width="100%" style="border-radius: 26px;" />
-			</a><br/>
+			Bluetooth task execution with completion and conversation writeback.
+		</td>
+	</tr>
+	<tr>
+		<td width="33%" valign="bottom">
+			<a href="https://youtube.com/shorts/xguWAnIMgHA?feature=share" target="_blank" rel="noopener noreferrer">
+				<img src="public-docs/showcases/previews/overall-preview.gif" alt="Overall Flow Demo" width="100%" />
+			</a>
+		</td>
+		<td width="33%" valign="bottom">
+			<a href="https://youtube.com/shorts/dCpU2XeuGb0?feature=share" target="_blank" rel="noopener noreferrer">
+				<img src="public-docs/showcases/previews/shopping-preview.gif" alt="Shopping Flow Demo" width="100%" />
+			</a>
+		</td>
+		<td width="33%" valign="bottom">
+			<a href="https://youtube.com/shorts/XUT8fFkm0Fg?feature=share" target="_blank" rel="noopener noreferrer">
+				<img src="public-docs/showcases/previews/bluetooth-preview.gif" alt="Bluetooth Flow Demo" width="100%" />
+			</a>
+		</td>
+	</tr>
+	<tr>
+		<td width="33%" valign="top">
+			<a href="public-docs/showcases/task-execution-closed-loop.md">Read walkthrough</a>
+		</td>
+		<td width="33%" valign="top">
+			<a href="public-docs/showcases/shopping-flow.md">Read walkthrough</a>
+		</td>
+		<td width="33%" valign="top">
 			<a href="public-docs/showcases/bluetooth-flow.md">Read walkthrough</a>
 		</td>
 	</tr>
