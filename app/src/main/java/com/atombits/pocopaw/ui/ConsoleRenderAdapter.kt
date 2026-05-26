@@ -14,6 +14,7 @@ import com.atombits.pocopaw.ConsoleTaskFormatter
 import com.atombits.pocopaw.ConsoleExecutionUiFormatter
 import com.atombits.pocopaw.ExecutionLogAdapter
 import com.atombits.pocopaw.MemoryState
+import com.atombits.pocopaw.DemoReleaseControl
 import com.atombits.pocopaw.MessageRole
 import com.atombits.pocopaw.PreferenceDiscoveryAppTarget
 import com.atombits.pocopaw.PreferenceDiscoveryCatalog
@@ -96,6 +97,15 @@ internal class ConsoleRenderAdapter(
         val resolvedState = store.resolveCurrentState()
         val visibleMessages = (store.resolveConversationMessages().filter(::isVisibleConversationMessage) + state.pendingConversationMessages)
             .sortedBy { message -> message.timestamp }
+        val usedTokens = DemoReleaseControl.readUsedTokens()
+        val tokenLimit = DemoReleaseControl.tokenLimit()
+        val remainingTokens = DemoReleaseControl.readRemainingTokens()
+        binding.demoTokenQuotaValueText.text = context.getString(
+            R.string.settings_demo_token_quota_value,
+            usedTokens,
+            tokenLimit,
+            remainingTokens
+        )
         val executionTimeline = ConsoleExecutionUiFormatter.buildExecutionTimeline(store)
         val executionSummary = ConsoleExecutionUiFormatter.buildExecutionSurfaceSummary(store)
         chatAdapter.submitList(visibleMessages)

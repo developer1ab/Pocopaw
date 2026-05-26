@@ -71,6 +71,7 @@
     <string name="request_failed_service">Semantic model request failed. Please try again.</string>
     <string name="request_failed_search">Internet search failed. Please try again.</string>
     <string name="request_failed_structured">Semantic model returned an incomplete structured reply. Please try again.</string>
+    <string name="request_failed_demo_quota_exceeded">Demo quota reached (1,000,000 tokens). Backend model and search are now disabled for this build.</string>
     <string name="screen_capture_permission_required">Screen capture permission is required before execution can continue.</string>
     <string name="screen_capture_still_preparing">Screen capture is still preparing. Please try again in a moment.</string>
     <string name="status_accessibility_off">Accessibility: off</string>
@@ -110,10 +111,13 @@
     <string name="settings_panel_title">Settings and diagnostics</string>
     <string name="settings_panel_subtitle">Configure model defaults, automation readiness, and focused discovery or extraction jobs.</string>
     <string name="settings_models_title">Models</string>
+    <string name="settings_demo_token_quota_label">Demo token quota</string>
+    <string name="settings_demo_token_quota_value">Used %1$d / %2$d tokens · Remaining %3$d</string>
     <string name="settings_provider_profile_label">Provider profile</string>
     <string name="settings_provider_profile_dialog_title">Select provider profile</string>
     <string name="settings_provider_profile_value">%1$s · %2$s</string>
     <string name="settings_provider_profile_updated">Provider profile updated: %1$s</string>
+    <string name="demo_settings_locked">Demo mode is locked: provider/model controls are fixed for this release package.</string>
     <string name="settings_provider_profile_domestic">Domestic default</string>
     <string name="settings_provider_profile_global">Global default</string>
     <string name="settings_provider_profile_custom">Custom</string>
@@ -240,6 +244,9 @@
     <string name="module_actions_title">Manual test actions</string>
     <string name="run_preference_discovery">Run one-off preference discovery</string>
     <string name="run_tool_discovery_scan">Run one-off tool discovery</string>
+    <string name="demo_onboarding_keep_settings">Finish setup steps first. The app will switch to chat automatically when done.</string>
+    <string name="demo_onboarding_wrong_step">Follow setup order: Accessibility → Screen capture → One-off tool discovery.</string>
+    <string name="demo_onboarding_completed">Setup completed. Switching to chat.</string>
     <string name="run_preference_extraction">Run preference extraction</string>
     <string name="preference_discovery_no_installed_targets">No supported app is installed for one-off preference discovery.</string>
     <string name="preference_discovery_select_domain_title">Select preference discovery domain</string>

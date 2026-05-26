@@ -191,6 +191,7 @@ class SearchAugmentationClient {
     suspend fun search(query: String): SearchAugmentationResult = search(listOf(query))
 
     suspend fun search(queries: List<String>): SearchAugmentationResult = withContext(Dispatchers.IO) {
+        DemoReleaseControl.ensureBackendAccessAllowed()
         val runtimeConfig = ProviderProfileRuntime.current().search
         val normalizedQueries = normalizeQueries(queries)
         if (normalizedQueries.isEmpty()) {

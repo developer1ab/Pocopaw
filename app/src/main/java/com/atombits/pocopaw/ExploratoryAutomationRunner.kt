@@ -144,6 +144,18 @@ internal class VisionAutomationAgentClient(
     private val httpClient = createAutomationHttpClient()
 
     override suspend fun query(request: AutomationQueryRequest): AutomationAgentResponse {
+        runCatching {
+            DemoReleaseControl.ensureBackendAccessAllowed()
+        }.onFailure {
+            return AutomationAgentResponse(
+                thought = "automation quota exhausted",
+                action = null,
+                message = "DEMO_QUOTA_EXCEEDED",
+                flowState = AutomationFlowState.FAILED,
+                businessState = AutomationBusinessState.FAILED,
+                executionStatus = "failed"
+            )
+        }
         val runtimeConfig = runtimeConfigProvider()
         if (!runtimeConfig.isConfigured()) {
             return AutomationAgentResponse(

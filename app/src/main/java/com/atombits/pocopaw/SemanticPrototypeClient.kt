@@ -210,6 +210,7 @@ class SemanticPrototypeClient {
         runtimeConfig: ProviderRuntimeConfig = defaultRuntimeConfig,
         turnOptions: ChatTurnOptions = ChatTurnOptions()
     ): RawPromptExchange {
+        DemoReleaseControl.ensureBackendAccessAllowed()
         if (!runtimeConfig.isConfigured()) {
             throw IllegalStateException("Missing semantic provider API key")
         }
@@ -217,7 +218,12 @@ class SemanticPrototypeClient {
         val requestBody = buildRequestBodyJson(promptMessages, requestConfig, runtimeConfig, turnOptions)
 
         if (runtimeConfig.apiStyle == ProviderApiStyle.GEMINI_GENERATE_CONTENT) {
-            return requestGeminiPromptMessagesExchange(requestBody, runtimeConfig)
+            val exchange = requestGeminiPromptMessagesExchange(requestBody, runtimeConfig)
+            DemoReleaseControl.consumeFromTokenUsage(
+                tokenUsage = parseTokenUsage(exchange.responsePayload),
+                fallbackTokens = requestConfig.maxTokens
+            )
+            return exchange
         }
 
         val request = Request.Builder()
@@ -232,10 +238,15 @@ class SemanticPrototypeClient {
             if (!response.isSuccessful) {
                 throw IOException("Semantic provider request failed: ${response.code} ${body.take(240)}")
             }
-            RawPromptExchange(
+            val exchange = RawPromptExchange(
                 requestPayload = requestBody.toString(),
                 responsePayload = body
             )
+            DemoReleaseControl.consumeFromTokenUsage(
+                tokenUsage = parseTokenUsage(exchange.responsePayload),
+                fallbackTokens = requestConfig.maxTokens
+            )
+            exchange
         }
     }
 
@@ -256,6 +267,7 @@ class SemanticPrototypeClient {
         turnOptions: ChatTurnOptions = ChatTurnOptions(),
         onDelta: (StreamingTurnDelta) -> Unit
     ): RawPromptExchange {
+        DemoReleaseControl.ensureBackendAccessAllowed()
         if (!runtimeConfig.isConfigured()) {
             throw IllegalStateException("Missing semantic provider API key")
         }
@@ -270,7 +282,12 @@ class SemanticPrototypeClient {
         )
 
         if (runtimeConfig.apiStyle == ProviderApiStyle.GEMINI_GENERATE_CONTENT) {
-            return requestGeminiPromptMessagesStreamingExchange(requestBody, runtimeConfig, onDelta)
+            val exchange = requestGeminiPromptMessagesStreamingExchange(requestBody, runtimeConfig, onDelta)
+            DemoReleaseControl.consumeFromTokenUsage(
+                tokenUsage = parseTokenUsage(exchange.responsePayload),
+                fallbackTokens = requestConfig.maxTokens
+            )
+            return exchange
         }
 
         val request = Request.Builder()
@@ -295,10 +312,15 @@ class SemanticPrototypeClient {
                     consumeStreamingDataLine(line, accumulator)?.let(onDelta)
                 }
             }
-            RawPromptExchange(
+            val exchange = RawPromptExchange(
                 requestPayload = requestBody.toString(),
                 responsePayload = buildStreamingRawResponse(accumulator)
             )
+            DemoReleaseControl.consumeFromTokenUsage(
+                tokenUsage = parseTokenUsage(exchange.responsePayload),
+                fallbackTokens = requestConfig.maxTokens
+            )
+            exchange
         }
     }
 

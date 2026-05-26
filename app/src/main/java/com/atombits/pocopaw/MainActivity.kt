@@ -1,6 +1,8 @@
 package com.atombits.pocopaw
 
 import android.Manifest
+import android.animation.ObjectAnimator
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -28,6 +30,7 @@ import com.atombits.pocopaw.shizuku.ShizukuBootstrapStatusCode
 import com.atombits.pocopaw.shizuku.ShizukuBootstrapSettingsStore
 import com.atombits.pocopaw.shizuku.ShizukuPrivilegeIdentity
 import com.atombits.pocopaw.shizuku.ShizukuStatusSnapshot
+import com.atombits.pocopaw.service.PrototypeAccessibilityService
 import com.atombits.pocopaw.service.RuntimeServiceStatusNotifier
 import com.atombits.pocopaw.ui.ConsoleRenderAdapter
 import com.atombits.pocopaw.ui.ConsoleRenderState
@@ -38,6 +41,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import rikka.shizuku.Shizuku
+import android.view.animation.LinearInterpolator
 import java.text.DateFormat
 import java.util.Date
 
@@ -50,6 +54,13 @@ private enum class ConsoleChannel {
     ALL,
     EXECUTION,
     CONVERSATION
+}
+
+private enum class DemoOnboardingStep {
+    TOOL_DISCOVERY,
+    ACCESSIBILITY,
+    SCREEN_CAPTURE,
+    DONE
 }
 
 class MainActivity : AppCompatActivity() {
@@ -133,6 +144,8 @@ class MainActivity : AppCompatActivity() {
     private var autoCaptureDeniedThisProcess = false
     private var pendingCaptureLaunchTrigger: BootstrapTrigger? = null
     private var pendingShizukuPermissionTrigger: BootstrapTrigger? = null
+    private var demoOnboardingStep: DemoOnboardingStep = DemoOnboardingStep.DONE
+    private var demoHighlightAnimator: ObjectAnimator? = null
     private var loadingAnimationRunning = false
     private var loadingAnimationFrame = 0
     private val loadingAnimationRunnable = object : Runnable {
@@ -203,10 +216,12 @@ class MainActivity : AppCompatActivity() {
                 lifecycleScope.launch {
                     val captureStatus = shizukuBootstrapManager.onCapturePermissionGranted()
                     render(storeData)
+                    refreshDemoOnboardingUi(force = true)
                     Snackbar.make(binding.root, buildShizukuPlanMessage(captureStatus), Snackbar.LENGTH_SHORT).show()
                 }
             } else {
                 render(storeData)
+                refreshDemoOnboardingUi(force = true)
                 Snackbar.make(binding.root, getString(R.string.screen_capture_permission_granted), Snackbar.LENGTH_SHORT).show()
             }
         } else {
@@ -216,8 +231,10 @@ class MainActivity : AppCompatActivity() {
             if (captureTrigger != null) {
                 shizukuBootstrapManager.onCapturePermissionDenied()
                 render(storeData)
+                refreshDemoOnboardingUi(force = true)
                 Snackbar.make(binding.root, getString(R.string.shizuku_message_capture_denied), Snackbar.LENGTH_SHORT).show()
             } else {
+                refreshDemoOnboardingUi(force = true)
                 Snackbar.make(binding.root, getString(R.string.screen_capture_permission_denied), Snackbar.LENGTH_SHORT).show()
             }
         }
@@ -245,18 +262,28 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         UiStrings.initialize(this)
-        currentSurface = savedInstanceState?.getString(STATE_SURFACE)
-            ?.let(MainSurface::valueOf)
-            ?: currentSurface
-        currentConsoleChannel = savedInstanceState?.getString(STATE_CONSOLE_CHANNEL)
-            ?.let(ConsoleChannel::valueOf)
-            ?: currentConsoleChannel
+        DemoReleaseControl.initialize(applicationContext)
+        if (savedInstanceState != null) {
+            currentSurface = savedInstanceState.getString(STATE_SURFACE)
+                ?.let(MainSurface::valueOf)
+                ?: currentSurface
+            currentConsoleChannel = savedInstanceState.getString(STATE_CONSOLE_CHANNEL)
+                ?.let(ConsoleChannel::valueOf)
+                ?: currentConsoleChannel
+        } else if (DemoReleaseControl.isOnboardingCompleted()) {
+            currentSurface = MainSurface.CONSOLE
+            currentConsoleChannel = ConsoleChannel.CONVERSATION
+        } else {
+            currentSurface = MainSurface.SETTINGS
+            currentConsoleChannel = ConsoleChannel.CONVERSATION
+        }
 
         prototypeStore = PrototypeStore(applicationContext)
         providerProfileSettingsStore.applyStoredConfig()
         captureCompressionSettingsStore.applyStoredScale()
         visionRequestThinkingSettingsStore.applyStoredEnabled()
         visionRequestSearchSettingsStore.applyStoredEnabled()
+        chatTurnOptions = ChatTurnOptions(thinkingEnabled = false, searchEnabled = true)
         chatAdapter = ChatAdapter()
         executionLogAdapter = ExecutionLogAdapter()
         consoleRenderAdapter = ConsoleRenderAdapter(
@@ -290,10 +317,12 @@ class MainActivity : AppCompatActivity() {
             currentConsoleChannel = ConsoleChannel.CONVERSATION
         }
         render(storeData)
+        refreshDemoOnboardingUi(force = true)
 
         lifecycleScope.launch {
             storeData = prototypeStore.load()
             render(storeData)
+            refreshDemoOnboardingUi(force = true)
         }
     }
 
@@ -318,6 +347,7 @@ class MainActivity : AppCompatActivity() {
         if (::binding.isInitialized) {
             refreshSurface()
             maybeRunStartupShizukuBootstrap()
+            refreshDemoOnboardingUi(force = true)
         }
     }
 
@@ -328,6 +358,7 @@ class MainActivity : AppCompatActivity() {
             Shizuku.removeRequestPermissionResultListener(shizukuPermissionResultListener)
         }
         RuntimeServiceStatusNotifier.removeListener(runtimeServiceStatusListener)
+        clearDemoHighlightAnimation()
         stopLoadingAnimation()
         super.onDestroy()
     }
@@ -346,12 +377,17 @@ class MainActivity : AppCompatActivity() {
 
     private fun bindSurfaceActions() {
         binding.settingsToggleButton.setOnClickListener {
+            if (!DemoReleaseControl.isOnboardingCompleted() && currentSurface == MainSurface.SETTINGS) {
+                Snackbar.make(binding.root, getString(R.string.demo_onboarding_keep_settings), Snackbar.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
             currentSurface = if (currentSurface == MainSurface.SETTINGS) {
                 MainSurface.CONSOLE
             } else {
                 MainSurface.SETTINGS
             }
             render(storeData)
+            refreshDemoOnboardingUi(force = false)
             if (currentSurface == MainSurface.SETTINGS) {
                 binding.settingsPageContainer.post {
                     binding.settingsPageContainer.fullScroll(View.FOCUS_UP)
@@ -368,12 +404,18 @@ class MainActivity : AppCompatActivity() {
 
     private fun bindSettingsActions() {
         binding.openAccessibilitySettingsButton.setOnClickListener {
+            if (shouldBlockDemoOnboardingAction(DemoOnboardingStep.ACCESSIBILITY)) {
+                return@setOnClickListener
+            }
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }
         binding.openUsageAccessSettingsButton.setOnClickListener {
             startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
         }
         binding.requestScreenCaptureButton.setOnClickListener {
+            if (shouldBlockDemoOnboardingAction(DemoOnboardingStep.SCREEN_CAPTURE)) {
+                return@setOnClickListener
+            }
             pendingCaptureLaunchTrigger = null
             screenCapturePermissionLauncher.launch(screenCaptureManager.createCaptureIntent())
         }
@@ -393,6 +435,9 @@ class MainActivity : AppCompatActivity() {
             showCaptureCompressionScaleDialog()
         }
         binding.runToolDiscoveryButton.setOnClickListener {
+            if (shouldBlockDemoOnboardingAction(DemoOnboardingStep.TOOL_DISCOVERY)) {
+                return@setOnClickListener
+            }
             runToolDiscoveryScan()
         }
         binding.runPreferenceDiscoveryButton.setOnClickListener {
@@ -405,34 +450,46 @@ class MainActivity : AppCompatActivity() {
             runProcessExtraction()
         }
         binding.providerProfileValueText.setOnClickListener {
-            showProviderProfileDialog()
+            Snackbar.make(binding.root, getString(R.string.demo_settings_locked), Snackbar.LENGTH_SHORT).show()
         }
         binding.semanticModelValueText.setOnClickListener {
-            showSemanticModelTierDialog()
+            Snackbar.make(binding.root, getString(R.string.demo_settings_locked), Snackbar.LENGTH_SHORT).show()
         }
         binding.visionModelValueText.setOnClickListener {
-            showQwenVisionModelDialog()
+            Snackbar.make(binding.root, getString(R.string.demo_settings_locked), Snackbar.LENGTH_SHORT).show()
         }
         binding.searchProviderValueText.setOnClickListener {
-            showSearchProviderDialog()
+            Snackbar.make(binding.root, getString(R.string.demo_settings_locked), Snackbar.LENGTH_SHORT).show()
         }
         binding.visionThinkingSwitch.setOnCheckedChangeListener { _, isChecked ->
-            visionRequestThinkingSettingsStore.writeEnabled(isChecked)
+            if (isChecked) {
+                binding.visionThinkingSwitch.isChecked = false
+            }
+            visionRequestThinkingSettingsStore.writeEnabled(false)
             render(storeData)
         }
         binding.visionSearchSwitch.setOnCheckedChangeListener { _, isChecked ->
-            visionRequestSearchSettingsStore.writeEnabled(isChecked)
+            if (isChecked) {
+                binding.visionSearchSwitch.isChecked = false
+            }
+            visionRequestSearchSettingsStore.writeEnabled(false)
             render(storeData)
         }
     }
 
     private fun bindConversationOptionActions() {
         binding.thinkingSwitch.setOnCheckedChangeListener { _, isChecked ->
-            chatTurnOptions = chatTurnOptions.copy(thinkingEnabled = isChecked)
+            if (isChecked) {
+                binding.thinkingSwitch.isChecked = false
+            }
+            chatTurnOptions = chatTurnOptions.copy(thinkingEnabled = false)
             render(storeData)
         }
         binding.searchSwitch.setOnCheckedChangeListener { _, isChecked ->
-            chatTurnOptions = chatTurnOptions.copy(searchEnabled = isChecked)
+            if (!isChecked) {
+                binding.searchSwitch.isChecked = true
+            }
+            chatTurnOptions = chatTurnOptions.copy(searchEnabled = true)
             render(storeData)
         }
     }
@@ -455,7 +512,10 @@ class MainActivity : AppCompatActivity() {
         binding.inputEditText.setText("")
         setLoading(true)
         lifecycleScope.launch {
-            val turnOptionsSnapshot = chatTurnOptions
+            val turnOptionsSnapshot = chatTurnOptions.copy(
+                thinkingEnabled = false,
+                searchEnabled = true
+            )
             when (
                 val result = chatTurnOrchestrator.submitMessage(
                     submittedInput = submittedInput,
@@ -583,8 +643,12 @@ class MainActivity : AppCompatActivity() {
     private fun render(store: PrototypeStoreData) {
         val runtimePreferences = store.resolveSemanticRuntimePreferences() ?: SemanticRuntimePreferences()
         val constrainedTurnOptions = coerceSemanticTurnOptions(runtimePreferences, chatTurnOptions)
-        if (constrainedTurnOptions != chatTurnOptions) {
-            chatTurnOptions = constrainedTurnOptions
+        val demoFixedTurnOptions = constrainedTurnOptions.copy(
+            thinkingEnabled = false,
+            searchEnabled = true
+        )
+        if (demoFixedTurnOptions != chatTurnOptions) {
+            chatTurnOptions = demoFixedTurnOptions
         }
         syncingShizukuAutoPrepareSwitch = true
         try {
@@ -609,6 +673,7 @@ class MainActivity : AppCompatActivity() {
         refreshConversationControlAvailability(store, loading)
         refreshVisionControlAvailability(loading)
         refreshSearchProviderAvailability(loading = loading)
+        refreshDemoOnboardingUi(force = false)
     }
 
     private fun setLoading(loading: Boolean) {
@@ -626,9 +691,9 @@ class MainActivity : AppCompatActivity() {
         binding.processThumbsUpButton.isEnabled = !loading
         binding.processThumbsDownButton.isEnabled = !loading
         binding.captureCompressionValueText.isEnabled = !loading
-        binding.providerProfileValueText.isEnabled = !loading
-        binding.semanticModelValueText.isEnabled = !loading
-        binding.visionModelValueText.isEnabled = !loading
+        binding.providerProfileValueText.isEnabled = false
+        binding.semanticModelValueText.isEnabled = false
+        binding.visionModelValueText.isEnabled = false
         refreshSearchProviderAvailability(loading)
         binding.runToolDiscoveryButton.isEnabled = !loading
         binding.runPreferenceDiscoveryButton.isEnabled = !loading
@@ -645,16 +710,17 @@ class MainActivity : AppCompatActivity() {
         store: PrototypeStoreData,
         loading: Boolean
     ) {
-        val runtimePreferences = store.resolveSemanticRuntimePreferences() ?: SemanticRuntimePreferences()
-        val controls = currentSemanticModelControls(runtimePreferences)
-        binding.thinkingSwitch.isEnabled = controls.thinkingSupported && !loading
-        binding.searchSwitch.isEnabled = controls.searchSupported && !loading
+        binding.thinkingSwitch.isEnabled = false
+        binding.searchSwitch.isEnabled = false
+        binding.thinkingSwitch.isChecked = false
+        binding.searchSwitch.isChecked = true
     }
 
     private fun refreshVisionControlAvailability(loading: Boolean) {
-        val controls = resolveVisionModelControls(ProviderProfileRuntime.current().vision.model)
-        binding.visionThinkingSwitch.isEnabled = controls.thinkingSupported && !loading
-        binding.visionSearchSwitch.isEnabled = controls.searchSupported && !loading
+        binding.visionThinkingSwitch.isEnabled = false
+        binding.visionSearchSwitch.isEnabled = false
+        binding.visionThinkingSwitch.isChecked = false
+        binding.visionSearchSwitch.isChecked = false
     }
 
     private fun loadingAnimationFrames(): Array<String> {
@@ -712,7 +778,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshSearchProviderAvailability(loading: Boolean) {
-        val searchProviderEditable = !loading && ProviderProfileRuntime.current().profileId == ProviderProfileId.CUSTOM
+        val searchProviderEditable = false
         binding.searchProviderValueText.isEnabled = searchProviderEditable
         binding.searchProviderValueText.isClickable = searchProviderEditable
         binding.searchProviderValueText.isFocusable = searchProviderEditable
@@ -767,6 +833,7 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             storeData = prototypeStore.load()
             render(storeData)
+            refreshDemoOnboardingUi(force = true)
             if (showMessage) {
                 Snackbar.make(binding.root, getString(R.string.status_refreshed), Snackbar.LENGTH_SHORT).show()
             }
@@ -777,6 +844,101 @@ class MainActivity : AppCompatActivity() {
         currentSurface = MainSurface.CONSOLE
         currentConsoleChannel = channel
         render(storeData)
+    }
+
+    private fun shouldBlockDemoOnboardingAction(requiredStep: DemoOnboardingStep): Boolean {
+        if (DemoReleaseControl.isOnboardingCompleted()) {
+            return false
+        }
+        val currentStep = resolveDemoOnboardingStep()
+        if (currentStep == requiredStep) {
+            return false
+        }
+        Snackbar.make(binding.root, getString(R.string.demo_onboarding_wrong_step), Snackbar.LENGTH_SHORT).show()
+        return true
+    }
+
+    private fun refreshDemoOnboardingUi(force: Boolean) {
+        if (DemoReleaseControl.isOnboardingCompleted()) {
+            demoOnboardingStep = DemoOnboardingStep.DONE
+            clearDemoHighlightAnimation()
+            return
+        }
+        val resolvedStep = resolveDemoOnboardingStep()
+        if (!force && resolvedStep == demoOnboardingStep) {
+            return
+        }
+        demoOnboardingStep = resolvedStep
+        when (resolvedStep) {
+            DemoOnboardingStep.TOOL_DISCOVERY -> {
+                applyDemoHighlightAnimation(binding.runToolDiscoveryButton)
+            }
+
+            DemoOnboardingStep.ACCESSIBILITY -> {
+                applyDemoHighlightAnimation(binding.openAccessibilitySettingsButton)
+            }
+
+            DemoOnboardingStep.SCREEN_CAPTURE -> {
+                applyDemoHighlightAnimation(binding.requestScreenCaptureButton)
+            }
+
+            DemoOnboardingStep.DONE -> {
+                DemoReleaseControl.markOnboardingCompleted()
+                clearDemoHighlightAnimation()
+                currentSurface = MainSurface.CONSOLE
+                currentConsoleChannel = ConsoleChannel.CONVERSATION
+                render(storeData)
+                Snackbar.make(binding.root, getString(R.string.demo_onboarding_completed), Snackbar.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun resolveDemoOnboardingStep(): DemoOnboardingStep {
+        if (toolspaceCatalogManager.getSnapshot().updatedAt == null) {
+            return DemoOnboardingStep.TOOL_DISCOVERY
+        }
+        if (!isAccessibilityServiceEnabledForDemo()) {
+            return DemoOnboardingStep.ACCESSIBILITY
+        }
+        if (!screenCaptureManager.hasPermission()) {
+            return DemoOnboardingStep.SCREEN_CAPTURE
+        }
+        return DemoOnboardingStep.DONE
+    }
+
+    private fun isAccessibilityServiceEnabledForDemo(): Boolean {
+        val expectedComponent = ComponentName(this, PrototypeAccessibilityService::class.java).flattenToString()
+        val enabledServices = Settings.Secure.getString(
+            contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ).orEmpty()
+        return PrototypeAccessibilityService.instance != null || enabledServices.split(':').any { service ->
+            service.equals(expectedComponent, ignoreCase = true)
+        }
+    }
+
+    private fun applyDemoHighlightAnimation(target: View) {
+        clearDemoHighlightAnimation()
+        resetDemoOnboardingButtonStyles()
+        target.alpha = 1f
+        demoHighlightAnimator = ObjectAnimator.ofFloat(target, View.ALPHA, 1f, 0.35f, 1f).apply {
+            duration = 900L
+            repeatCount = ObjectAnimator.INFINITE
+            interpolator = LinearInterpolator()
+            start()
+        }
+    }
+
+    private fun clearDemoHighlightAnimation() {
+        demoHighlightAnimator?.cancel()
+        demoHighlightAnimator = null
+        resetDemoOnboardingButtonStyles()
+    }
+
+    private fun resetDemoOnboardingButtonStyles() {
+        binding.openAccessibilitySettingsButton.alpha = 1f
+        binding.requestScreenCaptureButton.alpha = 1f
+        binding.runToolDiscoveryButton.alpha = 1f
     }
 
     private fun showProviderProfileDialog() {
@@ -976,8 +1138,10 @@ class MainActivity : AppCompatActivity() {
             }.onSuccess {
                 currentSurface = MainSurface.SETTINGS
                 render(storeData)
+                refreshDemoOnboardingUi(force = true)
                 Snackbar.make(binding.root, getString(R.string.tool_discovery_scan_complete), Snackbar.LENGTH_SHORT).show()
             }.onFailure { throwable ->
+                refreshDemoOnboardingUi(force = true)
                 Snackbar.make(binding.root, buildFailureMessage(throwable), Snackbar.LENGTH_LONG).show()
             }
             setLoading(false)

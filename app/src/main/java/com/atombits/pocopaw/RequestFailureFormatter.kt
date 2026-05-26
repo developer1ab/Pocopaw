@@ -5,6 +5,10 @@ import android.content.Context
 fun formatRequestFailureMessage(context: Context, throwable: Throwable): String {
     val rawMessage = throwable.message.orEmpty()
     return when {
+        rawMessage.contains("DEMO_QUOTA_EXCEEDED", ignoreCase = true) -> {
+            context.getString(R.string.request_failed_demo_quota_exceeded)
+        }
+
         rawMessage.contains("malformed structured content", ignoreCase = true) ||
             rawMessage.contains("empty content payload", ignoreCase = true) -> {
             context.getString(R.string.request_failed_structured)

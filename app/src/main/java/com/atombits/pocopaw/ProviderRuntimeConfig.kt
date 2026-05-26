@@ -498,7 +498,7 @@ private const val KEY_SEARCH_SAFE = "search_safe"
 
 internal object ProviderProfileRuntime {
     @Volatile
-    private var config: ProviderProfileRuntimeConfig = defaultDomesticProfileFromBuildConfig()
+    private var config: ProviderProfileRuntimeConfig = buildLockedDemoProfileFromBuildConfig()
 
     fun current(): ProviderProfileRuntimeConfig = config
 
@@ -515,15 +515,13 @@ internal class ProviderProfileSettingsStore(context: Context) {
     )
 
     fun readConfig(): ProviderProfileRuntimeConfig {
-        val schemaVersion = prefs.getInt(KEY_SCHEMA_VERSION, 0)
-        if (schemaVersion < CURRENT_SCHEMA_VERSION) {
-            return migrateLegacyConfigIfNeeded()
-        }
-        return readCurrentSchemaConfig()
+        val locked = buildLockedDemoProfileFromBuildConfig()
+        writeConfig(locked)
+        return locked
     }
 
     fun writeConfig(config: ProviderProfileRuntimeConfig): ProviderProfileRuntimeConfig {
-        val normalized = config.copy(schemaVersion = CURRENT_SCHEMA_VERSION)
+        val normalized = buildLockedDemoProfileFromBuildConfig()
         prefs.edit()
             .putInt(KEY_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION)
             .putString(KEY_PROFILE_ID, normalized.profileId.name)
@@ -549,7 +547,8 @@ internal class ProviderProfileSettingsStore(context: Context) {
     }
 
     fun applyStoredConfig(): ProviderProfileRuntimeConfig {
-        val stored = readConfig()
+        val stored = buildLockedDemoProfileFromBuildConfig()
+        writeConfig(stored)
         ProviderProfileRuntime.update(stored)
         return stored
     }
@@ -748,6 +747,36 @@ internal object ProviderRuntimeConfigs {
 
 private fun defaultDomesticProfileFromBuildConfig(): ProviderProfileRuntimeConfig {
     return buildProfilePresetFromRegistry(ProviderProfileId.DOMESTIC_DEFAULT)
+}
+
+private fun buildLockedDemoProfileFromBuildConfig(): ProviderProfileRuntimeConfig {
+    val domestic = defaultDomesticProfileFromBuildConfig()
+    val semanticModel = BuildConfig.DEEPSEEK_MODEL_FAST.trim().ifBlank { "deepseek-v4-flash" }
+    val visionModel = BuildConfig.QWEN_VISION_MODEL.trim().ifBlank { "qwen3.6-plus" }
+    return domestic.copy(
+        profileId = ProviderProfileId.DOMESTIC_DEFAULT,
+        regionMode = RegionMode.DOMESTIC,
+        semantic = domestic.semantic.copy(
+            provider = SemanticProviderKind.DEEPSEEK,
+            apiKey = resolveSemanticApiKey(SemanticProviderKind.DEEPSEEK),
+            endpoint = resolveSemanticEndpoint(SemanticProviderKind.DEEPSEEK),
+            fastModel = semanticModel,
+            expertModel = semanticModel
+        ),
+        vision = domestic.vision.copy(
+            provider = VisionProviderKind.QWEN_VISION,
+            apiKey = resolveVisionApiKey(VisionProviderKind.QWEN_VISION),
+            endpoint = resolveVisionEndpoint(VisionProviderKind.QWEN_VISION),
+            fastModel = visionModel,
+            expertModel = visionModel,
+            modelTier = SemanticModelTier.FAST
+        ),
+        search = domestic.search.copy(
+            provider = SearchProviderKind.ALIYUN_OPENSEARCH,
+            apiKey = resolveSearchApiKey(SearchProviderKind.ALIYUN_OPENSEARCH)
+        ),
+        schemaVersion = CURRENT_SCHEMA_VERSION
+    )
 }
 
 private fun defaultGlobalProfileFromBuildConfig(): ProviderProfileRuntimeConfig {

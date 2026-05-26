@@ -81,6 +81,11 @@ internal class VisionPreferenceDiscoveryResolver(
     }
 
     override suspend fun resolve(request: PreferenceDiscoveryVisionRequest): PreferenceDiscoveryVisionResolution {
+        runCatching {
+            DemoReleaseControl.ensureBackendAccessAllowed()
+        }.onFailure {
+            return PreferenceDiscoveryVisionResolution.failure("DEMO_QUOTA_EXCEEDED")
+        }
         if (apiKey.isBlank()) {
             return PreferenceDiscoveryVisionResolution.failure("api key not configured")
         }
