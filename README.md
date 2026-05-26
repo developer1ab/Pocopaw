@@ -21,19 +21,19 @@ Start here for the fastest product impression.
 		<td width="33%" valign="top">
 			<strong>Overall Flow</strong><br/>
 			End-to-end path from user request to execution writeback.<br/><br/>
-			<a href="public-docs/showcases/overalls.mp4">Watch demo</a><br/>
+			<a href="https://youtube.com/shorts/xguWAnIMgHA?feature=share">Watch demo</a><br/>
 			<a href="public-docs/showcases/task-execution-closed-loop.md">Read walkthrough</a>
 		</td>
 		<td width="33%" valign="top">
 			<strong>Shopping Flow</strong><br/>
 			Shopping-oriented request handling with visible execution feedback.<br/><br/>
-			<a href="public-docs/showcases/shoppings.mp4">Watch demo</a><br/>
+			<a href="https://youtube.com/shorts/dCpU2XeuGb0?feature=share">Watch demo</a><br/>
 			<a href="public-docs/showcases/shopping-flow.md">Read walkthrough</a>
 		</td>
 		<td width="33%" valign="top">
 			<strong>Bluetooth Flow</strong><br/>
 			Bluetooth task execution with completion and conversation writeback.<br/><br/>
-			<a href="public-docs/showcases/bluetooths.mp4">Watch demo</a><br/>
+			<a href="https://youtube.com/shorts/XUT8fFkm0Fg?feature=share">Watch demo</a><br/>
 			<a href="public-docs/showcases/bluetooth-flow.md">Read walkthrough</a>
 		</td>
 	</tr>

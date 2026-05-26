@@ -34,7 +34,11 @@ fun evaluateExecutionCompletionAgainstChecks(
     val failedChecks = checks.mapNotNull { check ->
         when (check.type) {
             ExecutionCheckType.SLOT_PRESERVED -> {
-                if (!check.isTargetObjectSlotPreservationCheck() || !trustedSlotEvidence.hasStructuredAutomationPayload) {
+                if (
+                    !check.required ||
+                    !check.isTargetObjectSlotPreservationCheck() ||
+                    !trustedSlotEvidence.hasStructuredAutomationPayload
+                ) {
                     null
                 } else {
                     val expected = check.expectedValue?.trim().orEmpty()
