@@ -12,11 +12,7 @@ Inspired by visual-control agent paradigms like Midscene and OpenClaw, Pocket AI
 
 Built for vision-guided mobile automation with reliable tap, swipe, and step-by-step task execution.
 
-Keywords: android ai agent, mobile ui automation, vision control agent, screen understanding, agentic workflow.
-
-Try Demo: GitHub Release and Pgyer download links are available in Quick links.
-
-Use it to prototype, evaluate, and ship real-world mobile AI agent experiences faster.
+Many visual-agent demos, including Midscene and Openclaw, are PC-driven; pocopaw focuses on a local Android execution path. Enable full automation control capaibility within smartphone.
 
 Compared with many visual-agent demos, the current focus here is a local-first Android execution chain that is observable, staged, and easy to validate on real devices.
 
