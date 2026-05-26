@@ -65,24 +65,26 @@ All showcase pages: [Showcase Hub](public-docs/showcases/README.md)
 
 ## What pocopaw is
 
-pocopaw is a local-first Android execution agent for personal workflows.
+pocopaw starts from a simple observation: smartphones are now the center of digital life, yet users still have to jump across many isolated apps to finish one complex task.
 
-It is trying to solve questions like these:
+Most voice assistants can handle only short, single-step commands. They usually cannot coordinate cross-app workflows, deeply understand user habits, or provide proactive help at the right time.
 
-- How should the system keep up with a request while the user is still clarifying it?
-- When should the product answer directly, when should it prepare a plan, and when is it finally allowed to execute?
-- How should execution prerequisites, missing details, and risk boundaries be made visible before execution starts?
-- How should results, evidence, preferences, and reusable process knowledge be written back after a task finishes?
+The vision of pocopaw is to build an open-source, all-purpose AI assistant that can:
 
-In product terms, pocopaw is closer to a personal execution agent on a phone than to a general-purpose chat application with a few automation features attached.
+- Understand natural-language intent across both simple and complex requests.
+- Orchestrate apps and services across the phone to complete multi-app tasks automatically.
+- Use a pure vision-driven control mode, so it can quickly unlock operational capability on existing apps through view-based interaction.
+- Learn user behavior patterns over time and deliver personalized suggestions at the right moment.
+- Evolve as an extensible platform where the open-source community can contribute reusable skills and continuously expand capability boundaries.
 
-## What it is not
+## Unique Features
 
-- It is not a black-box agent that silently pushes every request into execution.
-- It is not a single control plane where search, memory, preference, and execution authority are mixed together.
-- It is not a demo prototype held together by implicit fallback behavior.
-
-The project puts more weight on clear boundaries between user intent, planning, execution authority, runtime behavior, and later reuse.
+- Dual-model architecture for semantic orchestration and execution control.
+- Semantic model: understands user intent, performs holistic planning, and dispatches executable tasks.
+- Vision model: interprets screenshots and uses accessibility actions plus system intents to decompose each task into concrete steps and directly operate third-party apps.
+- Nested semantic-execution collaboration: planning and execution continuously refine each other to deliver end-to-end intent fulfillment.
+- Beyond popular skill- or MCP-style agent integrations, pocopaw opens a more hard-core control path through native visual recognition and humanoid click-level interaction, without requiring custom post-integration programming for each app.
+- It is a pure Android client app with no dependency on complex PC-side environments or gateway setups: install it on a phone and it appears directly as an AI agent or AI chat box, representing a major control-capability leap from the previous generation of chat-box assistants.
 
 ## Product surface
 
