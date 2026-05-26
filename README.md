@@ -8,6 +8,8 @@ Pocket AI Agent for Android
 
 An open-source Android AI agent that sees the screen, understands context, and controls interfaces like a human.
 
+Inspired by visual-control agent paradigms like Midscene and OpenClaw, Pocket AI Agent focuses on practical Android screen understanding and human-like UI control.
+
 Built for vision-guided mobile automation with reliable tap, swipe, and step-by-step task execution.
 
 Keywords: android ai agent, mobile ui automation, vision control agent, screen understanding, agentic workflow.
@@ -15,6 +17,8 @@ Keywords: android ai agent, mobile ui automation, vision control agent, screen u
 Try Demo: GitHub Release and Pgyer download links are available in Quick links.
 
 Use it to prototype, evaluate, and ship real-world mobile AI agent experiences faster.
+
+Compared with many visual-agent demos, the current focus here is a local-first Android execution chain that is observable, staged, and easy to validate on real devices.
 
 Quick links: [Docs](public-docs/README.md) · [Wiki](https://github.com/developer1ab/Pocopaw/wiki) · [Showcases](public-docs/showcases/README.md) · [Install](public-docs/install-and-configure.md) · [Main design](public-docs/main-design.md) · [Roadmap](public-docs/roadmap.md) · [Download v1.0.1 Demo](https://github.com/developer1ab/Pocopaw/releases/tag/v1.0.1) · [License](LICENSE)
 
