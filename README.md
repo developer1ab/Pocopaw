@@ -21,19 +21,46 @@ Start here for the fastest product impression.
 		<td width="33%" valign="top">
 			<strong>Overall Flow</strong><br/>
 			End-to-end path from user request to execution writeback.<br/><br/>
-			<a href="https://youtube.com/shorts/xguWAnIMgHA?feature=share">Watch demo</a><br/>
+			<iframe
+				width="100%"
+				height="320"
+				src="https://www.youtube.com/embed/xguWAnIMgHA"
+				title="Overall Flow Demo"
+				style="border-radius: 26px; border: none;"
+				allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+				referrerpolicy="strict-origin-when-cross-origin"
+				allowfullscreen>
+			</iframe><br/>
 			<a href="public-docs/showcases/task-execution-closed-loop.md">Read walkthrough</a>
 		</td>
 		<td width="33%" valign="top">
 			<strong>Shopping Flow</strong><br/>
 			Shopping-oriented request handling with visible execution feedback.<br/><br/>
-			<a href="https://youtube.com/shorts/dCpU2XeuGb0?feature=share">Watch demo</a><br/>
+			<iframe
+				width="100%"
+				height="320"
+				src="https://www.youtube.com/embed/dCpU2XeuGb0"
+				title="Shopping Flow Demo"
+				style="border-radius: 26px; border: none;"
+				allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+				referrerpolicy="strict-origin-when-cross-origin"
+				allowfullscreen>
+			</iframe><br/>
 			<a href="public-docs/showcases/shopping-flow.md">Read walkthrough</a>
 		</td>
 		<td width="33%" valign="top">
 			<strong>Bluetooth Flow</strong><br/>
 			Bluetooth task execution with completion and conversation writeback.<br/><br/>
-			<a href="https://youtube.com/shorts/XUT8fFkm0Fg?feature=share">Watch demo</a><br/>
+			<iframe
+				width="100%"
+				height="320"
+				src="https://www.youtube.com/embed/XUT8fFkm0Fg"
+				title="Bluetooth Flow Demo"
+				style="border-radius: 26px; border: none;"
+				allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+				referrerpolicy="strict-origin-when-cross-origin"
+				allowfullscreen>
+			</iframe><br/>
 			<a href="public-docs/showcases/bluetooth-flow.md">Read walkthrough</a>
 		</td>
 	</tr>
