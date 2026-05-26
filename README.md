@@ -4,11 +4,17 @@
 
 # pocopaw
 
-Android personal execution agent.
+Pocket AI Agent for Android
 
-pocopaw is an Android-based personal execution agent prototype. It is not trying to be another chat-first assistant. The goal is to move a user request through a controlled local chain: understanding, preparation, execution, verification, answer, and later reuse.
+An open-source Android AI agent that sees the screen, understands context, and controls interfaces like a human.
 
-The current product focus is deliberately narrow. Instead of exposing every capability at once, pocopaw is focused on making the local execution chain stable, observable, and controllable first.
+Built for vision-guided mobile automation with reliable tap, swipe, and step-by-step task execution.
+
+Keywords: android ai agent, mobile ui automation, vision control agent, screen understanding, agentic workflow.
+
+Try Demo: GitHub Release and Pgyer download links are available in Quick links.
+
+Use it to prototype, evaluate, and ship real-world mobile AI agent experiences faster.
 
 Quick links: [Docs](public-docs/README.md) · [Wiki](https://github.com/developer1ab/Pocopaw/wiki) · [Showcases](public-docs/showcases/README.md) · [Install](public-docs/install-and-configure.md) · [Main design](public-docs/main-design.md) · [Roadmap](public-docs/roadmap.md) · [Download v1.0.1 Demo](https://github.com/developer1ab/Pocopaw/releases/tag/v1.0.1) · [License](LICENSE)
 
