@@ -8,13 +8,11 @@ Pocket AI Agent for Android
 
 An open-source Android AI agent that sees the screen, understands context, and controls interfaces like a human.
 
-Inspired by visual-control agent paradigms like Midscene and OpenClaw, Pocket AI Agent focuses on practical Android screen understanding and human-like UI control.
+Inspired by visual-control agent like Midscene and full capability agent like OpenClaw, Pocket AI Agent focuses on practical Android screen understanding and human-like UI control. Its core advantages are clear: fully on-device Android control (instead of PC-driven control, as in many Midscene-style demos) and a lightweight architecture optimized for fast, responsive phone operation (compared with heavier OpenClaw-style setups).
 
-Built for vision-guided mobile automation with reliable tap, swipe, and step-by-step task execution.
+Built for vision-guided mobile automation with reliable tap, swipe, text input, and step-by-step task execution. It can directly invoke Android system intents and operate third-party apps. Around this control loop is a semantic-driven engine that manages human dialogue with prediction, planning, and execution capabilities.
 
-Many visual-agent demos, including Midscene and Openclaw, are PC-driven; pocopaw focuses on a local Android execution path. Enable full automation control capaibility within smartphone.
-
-Compared with many visual-agent demos, the current focus here is a local-first Android execution chain that is observable, staged, and easy to validate on real devices.
+On top of that is a dual-brain model: the semantic brain (big brain) handles end-to-end reasoning and orchestration, while the vision brain (small brain) executes automation actions and continuously syncs execution signals back to the big brain.
 
 Quick links: [Docs](public-docs/README.md) · [Wiki](https://github.com/developer1ab/Pocopaw/wiki) · [Showcases](public-docs/showcases/README.md) · [Install](public-docs/install-and-configure.md) · [Main design](public-docs/main-design.md) · [Roadmap](public-docs/roadmap.md) · [Download v1.0.1 Demo](https://github.com/developer1ab/Pocopaw/releases/tag/v1.0.1) · [License](LICENSE)
 
