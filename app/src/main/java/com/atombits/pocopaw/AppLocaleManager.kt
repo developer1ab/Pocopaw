@@ -9,9 +9,11 @@ internal enum class AppLanguage(val languageTag: String) {
     SIMPLIFIED_CHINESE("zh-Hans");
 
     companion object {
+        private val DEFAULT_LANGUAGE = ENGLISH
+
         fun fromLanguageTag(languageTag: String?): AppLanguage {
             return when {
-                languageTag.isNullOrBlank() -> ENGLISH
+                languageTag.isNullOrBlank() -> DEFAULT_LANGUAGE
                 languageTag.startsWith("zh", ignoreCase = true) -> SIMPLIFIED_CHINESE
                 else -> ENGLISH
             }
@@ -23,6 +25,8 @@ internal object AppLocaleManager {
 
     private const val PREFERENCES_NAME = "pocopaw_language_settings"
     private const val KEY_LANGUAGE_TAG = "language_tag"
+    @Volatile
+    private var cachedLanguage: AppLanguage? = null
 
     fun wrap(base: Context): Context {
         return createLocalizedContext(base, readLanguage(base))
@@ -47,10 +51,11 @@ internal object AppLocaleManager {
     }
 
     fun isEnglishLocale(): Boolean {
-        return Locale.getDefault().language.equals(Locale.ENGLISH.language, ignoreCase = true)
+        return (cachedLanguage ?: languageFromDefaultLocale()) == AppLanguage.ENGLISH
     }
 
     private fun applyLanguage(context: Context, language: AppLanguage, persist: Boolean) {
+        cachedLanguage = language
         if (persist) {
             preferences(context)
                 .edit()
@@ -68,7 +73,14 @@ internal object AppLocaleManager {
 
     private fun readLanguage(context: Context): AppLanguage {
         val storedLanguageTag = preferences(context).getString(KEY_LANGUAGE_TAG, AppLanguage.ENGLISH.languageTag)
-        return AppLanguage.fromLanguageTag(storedLanguageTag)
+        val language = AppLanguage.fromLanguageTag(storedLanguageTag)
+        cachedLanguage = language
+        return language
+    }
+
+    private fun languageFromDefaultLocale(): AppLanguage {
+        val languageTag = Locale.getDefault().toLanguageTag()
+        return AppLanguage.fromLanguageTag(languageTag)
     }
 
     private fun preferences(context: Context) =

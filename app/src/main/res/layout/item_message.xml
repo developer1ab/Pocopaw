@@ -224,6 +224,48 @@
                 android:layout_marginTop="8dp"
                 android:textColor="@color/slate_500"
                 android:textSize="10sp" />
+
+            <LinearLayout
+                android:id="@+id/messageActionRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:gravity="start"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <ImageButton
+                    android:id="@+id/speakMessageButton"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="@drawable/bg_message_action_icon"
+                    android:contentDescription="@string/message_action_speak"
+                    android:padding="9dp"
+                    android:src="@drawable/ic_message_action_speak"
+                    app:tint="@color/ink_900" />
+
+                <ImageButton
+                    android:id="@+id/copyMessageButton"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="6dp"
+                    android:background="@drawable/bg_message_action_icon"
+                    android:contentDescription="@string/message_action_copy"
+                    android:padding="9dp"
+                    android:src="@drawable/ic_message_action_copy"
+                    app:tint="@color/ink_900" />
+
+                <ImageButton
+                    android:id="@+id/forwardMessageButton"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="6dp"
+                    android:background="@drawable/bg_message_action_icon"
+                    android:contentDescription="@string/message_action_forward"
+                    android:padding="9dp"
+                    android:src="@drawable/ic_message_action_forward"
+                    app:tint="@color/ink_900" />
+            </LinearLayout>
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 

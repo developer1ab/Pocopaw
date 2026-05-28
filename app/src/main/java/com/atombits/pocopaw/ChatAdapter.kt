@@ -19,11 +19,19 @@ import java.util.Locale
 
 private const val CHAT_BUBBLE_WIDTH_RATIO = 0.7f
 
-class ChatAdapter : ListAdapter<ChatMessage, ChatAdapter.MessageViewHolder>(DiffCallback) {
+class ChatAdapter(
+    private val actionListener: MessageActionListener? = null
+) : ListAdapter<ChatMessage, ChatAdapter.MessageViewHolder>(DiffCallback) {
+
+    interface MessageActionListener {
+        fun onSpeakMessage(message: ChatMessage)
+        fun onCopyMessage(message: ChatMessage)
+        fun onForwardMessage(message: ChatMessage)
+    }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): MessageViewHolder {
         val binding = ItemMessageBinding.inflate(LayoutInflater.from(parent.context), parent, false)
-        return MessageViewHolder(binding)
+        return MessageViewHolder(binding, actionListener)
     }
 
     override fun onBindViewHolder(holder: MessageViewHolder, position: Int) {
@@ -31,7 +39,8 @@ class ChatAdapter : ListAdapter<ChatMessage, ChatAdapter.MessageViewHolder>(Diff
     }
 
     class MessageViewHolder(
-        private val binding: ItemMessageBinding
+        private val binding: ItemMessageBinding,
+        private val actionListener: MessageActionListener?
     ) : RecyclerView.ViewHolder(binding.root) {
 
         private val formatter = SimpleDateFormat("HH:mm", Locale.getDefault())
@@ -55,6 +64,7 @@ class ChatAdapter : ListAdapter<ChatMessage, ChatAdapter.MessageViewHolder>(Diff
             )
             val hasAnswerLabel = message.role == MessageRole.ASSISTANT && hasAnswer
             val showAssistantAvatar = message.role == MessageRole.ASSISTANT
+            val showMessageActions = message.role == MessageRole.ASSISTANT && hasAnswer
             binding.avatarImage.isVisible = showAssistantAvatar
             binding.roleText.text = message.role.label(context)
             binding.capabilityText.isVisible = turnCapabilitySummary.isNotBlank()
@@ -84,6 +94,16 @@ class ChatAdapter : ListAdapter<ChatMessage, ChatAdapter.MessageViewHolder>(Diff
             binding.sourceText.isVisible = showSources
             binding.sourceText.text = sourceFooter
             binding.sourceText.movementMethod = if (showSources) LinkMovementMethod.getInstance() else null
+            binding.messageActionRow.isVisible = showMessageActions
+            binding.speakMessageButton.setOnClickListener {
+                actionListener?.onSpeakMessage(message)
+            }
+            binding.copyMessageButton.setOnClickListener {
+                actionListener?.onCopyMessage(message)
+            }
+            binding.forwardMessageButton.setOnClickListener {
+                actionListener?.onForwardMessage(message)
+            }
             val tokenText = if (message.role == MessageRole.ASSISTANT) {
                 message.tokenUsage?.totalTokens?.let { totalTokens ->
                     context.getString(R.string.message_token_usage, totalTokens)
@@ -102,6 +122,7 @@ class ChatAdapter : ListAdapter<ChatMessage, ChatAdapter.MessageViewHolder>(Diff
                     params.gravity = Gravity.END
                     binding.messageCard.setCardBackgroundColor(context.getColor(R.color.bubble_user))
                     applyBubbleContentAlignment(Gravity.END)
+                    binding.contentText.gravity = Gravity.START
                 }
                 MessageRole.ASSISTANT -> {
                     params.gravity = Gravity.START

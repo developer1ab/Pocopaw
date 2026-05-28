@@ -1,9 +1,9 @@
 package com.atombits.pocopaw.ui
 
-import android.app.AppOpsManager
 import android.content.ComponentName
 import android.content.Context
 import android.provider.Settings
+import android.util.Log
 import android.view.View
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
@@ -32,6 +32,11 @@ import com.atombits.pocopaw.ScreenCaptureCompressionSettingsStore
 import com.atombits.pocopaw.SemanticModelTier
 import com.atombits.pocopaw.SemanticRuntimePreferences
 import com.atombits.pocopaw.ToolspaceCatalogManager
+import com.atombits.pocopaw.VoiceCloudRegion
+import com.atombits.pocopaw.VoiceCnProvider
+import com.atombits.pocopaw.VoiceGlobalProvider
+import com.atombits.pocopaw.VoiceRecognitionMode
+import com.atombits.pocopaw.VoiceRecognitionSettingsStore
 import com.atombits.pocopaw.VisionRequestSearchSettingsStore
 import com.atombits.pocopaw.VisionRequestThinkingSettingsStore
 import com.atombits.pocopaw.buildPreferenceDiscoveryStatusSummary
@@ -55,6 +60,8 @@ import com.google.android.material.button.MaterialButton
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private const val TOGGLE_TRACE_TAG = "ToggleTrace"
 
 internal data class ConsoleRenderState(
     val pendingConversationMessages: List<ChatMessage>,
@@ -89,6 +96,7 @@ internal class ConsoleRenderAdapter(
     private val visionRequestSearchSettingsStore: VisionRequestSearchSettingsStore
 ) {
     private val timestampFormatter = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault())
+    private val voiceRecognitionSettingsStore = VoiceRecognitionSettingsStore(context)
 
     fun render(
         store: PrototypeStoreData,
@@ -225,9 +233,6 @@ internal class ConsoleRenderAdapter(
         binding.captureStatusText.text = context.getString(
             if (CaptureService.isReady) R.string.status_capture_on else R.string.status_capture_off
         )
-        binding.usageAccessStatusText.text = context.getString(
-            if (isUsageAccessEnabled()) R.string.status_usage_access_on else R.string.status_usage_access_off
-        )
         binding.shizukuStatusText.isVisible = shizukuSurfaceState.visible
         binding.shizukuStatusText.text = shizukuSurfaceState.topStatusText
     }
@@ -268,24 +273,49 @@ internal class ConsoleRenderAdapter(
             )
         }
         if (binding.visionThinkingSwitch.isChecked != visionRequestThinkingSettingsStore.isEnabled()) {
+            Log.d(
+                TOGGLE_TRACE_TAG,
+                "render settings visionThinkingSwitch setChecked from=${binding.visionThinkingSwitch.isChecked} to=${visionRequestThinkingSettingsStore.isEnabled()}"
+            )
             binding.visionThinkingSwitch.isChecked = visionRequestThinkingSettingsStore.isEnabled()
         }
         if (binding.visionSearchSwitch.isChecked != visionRequestSearchSettingsStore.isEnabled()) {
+            Log.d(
+                TOGGLE_TRACE_TAG,
+                "render settings visionSearchSwitch setChecked from=${binding.visionSearchSwitch.isChecked} to=${visionRequestSearchSettingsStore.isEnabled()}"
+            )
             binding.visionSearchSwitch.isChecked = visionRequestSearchSettingsStore.isEnabled()
         }
-        val visionControls = resolveVisionModelControls(providerProfile.vision.model)
-        binding.visionThinkingSwitch.isEnabled = visionControls.thinkingSupported
-        binding.visionSearchSwitch.isEnabled = visionControls.searchSupported
-        val semanticControls = currentSemanticModelControls(runtimePreferences)
-        binding.thinkingSwitch.isEnabled = semanticControls.thinkingSupported
-        binding.searchSwitch.isEnabled = semanticControls.searchSupported
+        binding.visionThinkingSwitch.isEnabled = true
+        binding.visionSearchSwitch.isEnabled = true
+        binding.thinkingSwitch.isEnabled = true
+        binding.searchSwitch.isEnabled = true
         if (binding.thinkingSwitch.isChecked != state.chatTurnOptions.thinkingEnabled) {
+            Log.d(
+                TOGGLE_TRACE_TAG,
+                "render settings thinkingSwitch setChecked from=${binding.thinkingSwitch.isChecked} to=${state.chatTurnOptions.thinkingEnabled}"
+            )
             binding.thinkingSwitch.isChecked = state.chatTurnOptions.thinkingEnabled
         }
         if (binding.searchSwitch.isChecked != state.chatTurnOptions.searchEnabled) {
+            Log.d(
+                TOGGLE_TRACE_TAG,
+                "render settings searchSwitch setChecked from=${binding.searchSwitch.isChecked} to=${state.chatTurnOptions.searchEnabled}"
+            )
             binding.searchSwitch.isChecked = state.chatTurnOptions.searchEnabled
         }
         binding.searchProviderValueText.text = formatSearchProviderLabel(providerProfile.search.provider)
+        val voiceSettings = voiceRecognitionSettingsStore.read()
+        binding.voiceRecognitionModeValueText.text = formatVoiceRecognitionModeLabel(voiceSettings.mode)
+        binding.voiceCloudRegionValueText.text = formatVoiceCloudRegionLabel(voiceSettings.cloudRegion)
+        binding.voiceCloudCnProviderValueText.text = formatVoiceCnProviderLabel(voiceSettings.cnProvider)
+        binding.voiceCloudTencentTtsVoiceValueText.text = formatTencentTtsVoiceLabel(voiceSettings.tencentTtsVoiceType)
+        binding.voiceCloudGlobalProviderValueText.text = formatVoiceGlobalProviderLabel(voiceSettings.globalProvider)
+        binding.voiceAutoSpeakValueText.text = if (voiceSettings.autoSpeakEnabled) {
+            context.getString(R.string.settings_voice_auto_speak_on)
+        } else {
+            context.getString(R.string.settings_voice_auto_speak_off)
+        }
         binding.captureCompressionValueText.text = "Screenshot upload: ${formatCaptureCompressionSummary(captureCompressionSettingsStore.readScale())}"
         binding.scanAppsValueText.text = formatToolDiscoverySummary(toolspaceSnapshot)
         binding.preferenceDiscoveryValueText.text = buildPreferenceDiscoveryStatusSummary(
@@ -349,9 +379,17 @@ internal class ConsoleRenderAdapter(
             )
         }
         if (binding.thinkingSwitch.isChecked != chatTurnOptions.thinkingEnabled) {
+            Log.d(
+                TOGGLE_TRACE_TAG,
+                "render conversation thinkingSwitch setChecked from=${binding.thinkingSwitch.isChecked} to=${chatTurnOptions.thinkingEnabled}"
+            )
             binding.thinkingSwitch.isChecked = chatTurnOptions.thinkingEnabled
         }
         if (binding.searchSwitch.isChecked != chatTurnOptions.searchEnabled) {
+            Log.d(
+                TOGGLE_TRACE_TAG,
+                "render conversation searchSwitch setChecked from=${binding.searchSwitch.isChecked} to=${chatTurnOptions.searchEnabled}"
+            )
             binding.searchSwitch.isChecked = chatTurnOptions.searchEnabled
         }
         val controls = currentSemanticModelControls(runtimePreferences)
@@ -397,6 +435,44 @@ internal class ConsoleRenderAdapter(
         }
     }
 
+    private fun formatVoiceRecognitionModeLabel(mode: VoiceRecognitionMode): String {
+        return when (mode) {
+            VoiceRecognitionMode.LOCAL -> context.getString(R.string.settings_voice_mode_local)
+            VoiceRecognitionMode.CLOUD -> context.getString(R.string.settings_voice_mode_cloud)
+        }
+    }
+
+    private fun formatVoiceCloudRegionLabel(region: VoiceCloudRegion): String {
+        return when (region) {
+            VoiceCloudRegion.CN -> context.getString(R.string.settings_voice_cloud_region_cn)
+            VoiceCloudRegion.GLOBAL -> context.getString(R.string.settings_voice_cloud_region_global)
+        }
+    }
+
+    private fun formatVoiceCnProviderLabel(provider: VoiceCnProvider): String {
+        return when (provider) {
+            VoiceCnProvider.TENCENT -> context.getString(R.string.settings_voice_provider_tencent)
+            VoiceCnProvider.ALI -> context.getString(R.string.settings_voice_provider_ali)
+        }
+    }
+
+    private fun formatVoiceGlobalProviderLabel(provider: VoiceGlobalProvider): String {
+        return when (provider) {
+            VoiceGlobalProvider.DEEPGRAM -> context.getString(R.string.settings_voice_provider_deepgram)
+            VoiceGlobalProvider.GOOGLE -> context.getString(R.string.settings_voice_provider_google)
+        }
+    }
+
+    private fun formatTencentTtsVoiceLabel(voiceType: Int): String {
+        return when (voiceType) {
+            101015 -> context.getString(R.string.settings_voice_tts_voice_boy)
+            101016 -> context.getString(R.string.settings_voice_tts_voice_girl)
+            502007 -> context.getString(R.string.settings_voice_tts_voice_chat_child)
+            603002 -> context.getString(R.string.settings_voice_tts_voice_soft_boy)
+            else -> context.getString(R.string.settings_voice_tts_voice_custom, voiceType)
+        }
+    }
+
     private fun updateButtonState(
         button: MaterialButton,
         selected: Boolean,
@@ -419,16 +495,6 @@ internal class ConsoleRenderAdapter(
         return PrototypeAccessibilityService.instance != null || enabledServices.split(':').any { service ->
             service.equals(expectedComponent, ignoreCase = true)
         }
-    }
-
-    private fun isUsageAccessEnabled(): Boolean {
-        val appOpsManager = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
-        val mode = appOpsManager.checkOpNoThrow(
-            AppOpsManager.OPSTR_GET_USAGE_STATS,
-            context.applicationInfo.uid,
-            context.packageName
-        )
-        return mode == AppOpsManager.MODE_ALLOWED
     }
 
     private fun resolveInstalledPreferenceDiscoveryTargets(): List<PreferenceDiscoveryAppTarget> {

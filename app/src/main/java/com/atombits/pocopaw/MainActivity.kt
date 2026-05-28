@@ -2,19 +2,35 @@ package com.atombits.pocopaw
 
 import android.Manifest
 import android.animation.ObjectAnimator
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
+import android.graphics.Bitmap
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaPlayer
+import android.media.MediaRecorder
+import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
+import android.speech.RecognizerIntent
+import android.util.Log
+import android.speech.tts.TextToSpeech
 import android.text.InputType
+import android.view.KeyEvent
 import android.view.View
+import android.view.MotionEvent
+import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.atombits.pocopaw.databinding.ActivityMainBinding
@@ -38,12 +54,20 @@ import com.atombits.pocopaw.ui.ShizukuSurfaceState
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import rikka.shizuku.Shizuku
 import android.view.animation.LinearInterpolator
+import java.io.File
+import java.io.FileOutputStream
+import java.io.ByteArrayOutputStream
 import java.text.DateFormat
 import java.util.Date
+import java.util.Locale
 
 private enum class MainSurface {
     CONSOLE,
@@ -56,6 +80,8 @@ private enum class ConsoleChannel {
     CONVERSATION
 }
 
+private const val TOGGLE_TRACE_TAG = "ToggleTrace"
+
 private enum class DemoOnboardingStep {
     TOOL_DISCOVERY,
     ACCESSIBILITY,
@@ -66,10 +92,15 @@ private enum class DemoOnboardingStep {
 class MainActivity : AppCompatActivity() {
 
     private companion object {
+        private const val VOICE_DEBUG_TAG = "VoiceInputDebug"
         private const val REQUEST_CODE_SHIZUKU_PERMISSION = 7001
         private const val LOADING_ANIMATION_INTERVAL_MS = 450L
         private const val STATE_SURFACE = "state_surface"
         private const val STATE_CONSOLE_CHANNEL = "state_console_channel"
+        private const val TENCENT_TTS_VOICE_BOY = 101015
+        private const val TENCENT_TTS_VOICE_GIRL = 101016
+        private const val TENCENT_TTS_VOICE_CHAT_CHILD = 502007
+        private const val TENCENT_TTS_VOICE_SOFT_BOY = 603002
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -124,6 +155,9 @@ class MainActivity : AppCompatActivity() {
     private val providerProfileSettingsStore by lazy(LazyThreadSafetyMode.NONE) {
         ProviderProfileSettingsStore(applicationContext)
     }
+    private val voiceRecognitionSettingsStore by lazy(LazyThreadSafetyMode.NONE) {
+        VoiceRecognitionSettingsStore(applicationContext)
+    }
     private val shizukuBootstrapSettingsStore by lazy(LazyThreadSafetyMode.NONE) {
         ShizukuBootstrapSettingsStore(applicationContext)
     }
@@ -148,6 +182,46 @@ class MainActivity : AppCompatActivity() {
     private var demoHighlightAnimator: ObjectAnimator? = null
     private var loadingAnimationRunning = false
     private var loadingAnimationFrame = 0
+    private var textToSpeech: TextToSpeech? = null
+    private var ttsReady = false
+    private val tencentTtsClient = TencentTtsClient()
+    private var cloudTtsPlayer: MediaPlayer? = null
+    private var cloudTtsTempFile: File? = null
+    private var cloudTtsJob: Job? = null
+    private val asrRoutingClient = AsrRoutingClient()
+    private var isVoiceRecording = false
+    private var composerPressToTalkMode = false
+    private var lastAutoSpokenMessageId: String? = null
+    private var audioRecord: AudioRecord? = null
+    private var voiceRecordJob: Job? = null
+    private var recordedPcmBuffer: ByteArrayOutputStream? = null
+    private var voiceRecordingStartedAtMs: Long = 0L
+
+    private val speechInputLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (!::binding.isInitialized) {
+            return@registerForActivityResult
+        }
+        if (result.resultCode != RESULT_OK) {
+            Snackbar.make(binding.root, getString(R.string.voice_input_no_result), Snackbar.LENGTH_SHORT).show()
+            return@registerForActivityResult
+        }
+        val transcript = result.data
+            ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            ?.firstOrNull()
+            ?.trim()
+            .orEmpty()
+        if (transcript.isBlank()) {
+            Snackbar.make(binding.root, getString(R.string.voice_input_no_result), Snackbar.LENGTH_SHORT).show()
+            return@registerForActivityResult
+        }
+        val existing = binding.inputEditText.text?.toString()?.trim().orEmpty()
+        val merged = if (existing.isBlank()) transcript else "$existing $transcript"
+        binding.inputEditText.setText(merged)
+        binding.inputEditText.setSelection(merged.length)
+        submitMessage()
+    }
     private val loadingAnimationRunnable = object : Runnable {
         override fun run() {
             if (!loadingAnimationRunning || !::binding.isInitialized) {
@@ -212,6 +286,9 @@ class MainActivity : AppCompatActivity() {
         val resultData = result.data
         if (result.resultCode == RESULT_OK && resultData != null) {
             screenCaptureManager.savePermission(result.resultCode, resultData)
+            if (!DemoReleaseControl.isOnboardingCompleted()) {
+                DemoReleaseControl.markScreenCaptureOnboardingCompleted()
+            }
             if (captureTrigger != null) {
                 lifecycleScope.launch {
                     val captureStatus = shizukuBootstrapManager.onCapturePermissionGranted()
@@ -252,6 +329,41 @@ class MainActivity : AppCompatActivity() {
         }
         Snackbar.make(binding.root, message, Snackbar.LENGTH_SHORT).show()
     }
+    private val recordAudioPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (!::binding.isInitialized) {
+            return@registerForActivityResult
+        }
+        if (!granted) {
+            Snackbar.make(binding.root, getString(R.string.voice_input_permission_denied), Snackbar.LENGTH_SHORT).show()
+            return@registerForActivityResult
+        }
+        beginVoiceRecordingSession()
+    }
+    private val imagePickerLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (!::binding.isInitialized) {
+            return@registerForActivityResult
+        }
+        uri ?: return@registerForActivityResult
+        handleSelectedImage(uri = uri, fromCamera = false)
+    }
+    private val cameraPreviewLauncher = registerForActivityResult(
+        ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (!::binding.isInitialized) {
+            return@registerForActivityResult
+        }
+        bitmap ?: return@registerForActivityResult
+        val uri = saveCapturedBitmap(bitmap)
+        if (uri == null) {
+            Snackbar.make(binding.root, getString(R.string.image_capture_failed), Snackbar.LENGTH_SHORT).show()
+            return@registerForActivityResult
+        }
+        handleSelectedImage(uri = uri, fromCamera = true)
+    }
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(AppLocaleManager.wrap(newBase))
@@ -284,7 +396,21 @@ class MainActivity : AppCompatActivity() {
         visionRequestThinkingSettingsStore.applyStoredEnabled()
         visionRequestSearchSettingsStore.applyStoredEnabled()
         chatTurnOptions = ChatTurnOptions(thinkingEnabled = false, searchEnabled = true)
-        chatAdapter = ChatAdapter()
+        chatAdapter = ChatAdapter(
+            object : ChatAdapter.MessageActionListener {
+                override fun onSpeakMessage(message: ChatMessage) {
+                    speakMessage(message)
+                }
+
+                override fun onCopyMessage(message: ChatMessage) {
+                    copyMessage(message)
+                }
+
+                override fun onForwardMessage(message: ChatMessage) {
+                    forwardMessage(message)
+                }
+            }
+        )
         executionLogAdapter = ExecutionLogAdapter()
         consoleRenderAdapter = ConsoleRenderAdapter(
             context = applicationContext,
@@ -309,6 +435,7 @@ class MainActivity : AppCompatActivity() {
         bindSurfaceActions()
         bindSettingsActions()
         bindConversationOptionActions()
+        initTextToSpeech()
         registerShizukuListeners()
         RuntimeServiceStatusNotifier.addListener(runtimeServiceStatusListener)
         ensureContactsPermissionIfNeeded()
@@ -352,11 +479,24 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        stopVoiceRecordingSession(cancelOnly = true)
         runCatching {
             Shizuku.removeBinderReceivedListener(shizukuBinderReceivedListener)
             Shizuku.removeBinderDeadListener(shizukuBinderDeadListener)
             Shizuku.removeRequestPermissionResultListener(shizukuPermissionResultListener)
         }
+        textToSpeech?.stop()
+        textToSpeech?.shutdown()
+        textToSpeech = null
+        ttsReady = false
+        cloudTtsJob?.cancel()
+        cloudTtsJob = null
+        cloudTtsPlayer?.stop()
+        cloudTtsPlayer?.reset()
+        cloudTtsPlayer?.release()
+        cloudTtsPlayer = null
+        cloudTtsTempFile?.delete()
+        cloudTtsTempFile = null
         RuntimeServiceStatusNotifier.removeListener(runtimeServiceStatusListener)
         clearDemoHighlightAnimation()
         stopLoadingAnimation()
@@ -364,7 +504,57 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun bindPrimaryActions() {
-        binding.sendButton.setOnClickListener { submitMessage() }
+        binding.inputEditText.doAfterTextChanged {
+            refreshComposerActionButtons()
+        }
+        binding.inputEditText.setOnEditorActionListener { _, actionId, event ->
+            val shouldSubmit = actionId == EditorInfo.IME_ACTION_SEND ||
+                (event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)
+            if (!shouldSubmit) {
+                return@setOnEditorActionListener false
+            }
+            submitMessage()
+            true
+        }
+        binding.inputModeToggleButton.setOnClickListener {
+            setComposerPressToTalkMode(!composerPressToTalkMode)
+        }
+        binding.holdToTalkButton.setOnTouchListener { _, event ->
+            val settings = voiceRecognitionSettingsStore.read()
+            when (settings.mode) {
+                VoiceRecognitionMode.LOCAL -> {
+                    if (event.action == MotionEvent.ACTION_UP) {
+                        startLocalVoiceInput()
+                    }
+                    true
+                }
+
+                VoiceRecognitionMode.CLOUD -> {
+                    when (event.action) {
+                        MotionEvent.ACTION_DOWN -> {
+                            startVoiceInput()
+                            true
+                        }
+
+                        MotionEvent.ACTION_UP -> {
+                            stopVoiceRecordingSession(cancelOnly = false)
+                            true
+                        }
+
+                        MotionEvent.ACTION_CANCEL -> {
+                            stopVoiceRecordingSession(cancelOnly = true)
+                            true
+                        }
+
+                        else -> false
+                    }
+                }
+            }
+        }
+        setComposerPressToTalkMode(false)
+        binding.sendMessageButton.setOnClickListener { submitMessage() }
+        binding.pickImageButton.setOnClickListener { imagePickerLauncher.launch("image/*") }
+        binding.captureImageButton.setOnClickListener { cameraPreviewLauncher.launch(null) }
         binding.startPreparingButton.setOnClickListener { startPreparing() }
         binding.startExecutionButton.setOnClickListener { startExecution() }
         binding.processThumbsUpButton.setOnClickListener {
@@ -372,6 +562,47 @@ class MainActivity : AppCompatActivity() {
         }
         binding.processThumbsDownButton.setOnClickListener {
             submitCompletedExecutionFeedback(ProcessFeedbackType.THUMBS_DOWN)
+        }
+    }
+
+    private fun setComposerPressToTalkMode(enabled: Boolean) {
+        composerPressToTalkMode = enabled
+        binding.holdToTalkButton.visibility = if (enabled) View.VISIBLE else View.GONE
+        binding.inputEditText.visibility = if (enabled) View.GONE else View.VISIBLE
+        val iconRes = if (enabled) {
+            R.drawable.ic_wechat_keyboard
+        } else {
+            R.drawable.ic_wechat_mic
+        }
+        binding.inputModeToggleButton.setImageResource(iconRes)
+        val contentDescriptionRes = if (enabled) {
+            R.string.voice_input_toggle_to_text
+        } else {
+            R.string.voice_input_toggle_to_voice
+        }
+        binding.inputModeToggleButton.contentDescription = getString(contentDescriptionRes)
+        updateHoldToTalkVisual(isRecording = false)
+        refreshComposerActionButtons()
+    }
+
+    private fun refreshComposerActionButtons() {
+        val hasInput = binding.inputEditText.text?.toString()?.trim()?.isNotEmpty() == true
+        val showSend = !composerPressToTalkMode && hasInput
+        binding.sendMessageButton.visibility = if (showSend) View.VISIBLE else View.GONE
+        binding.pickImageButton.visibility = if (showSend) View.GONE else View.VISIBLE
+    }
+
+    private fun updateHoldToTalkVisual(isRecording: Boolean) {
+        if (isRecording) {
+            binding.holdToTalkButton.setBackgroundResource(R.drawable.bg_chat_hold_to_talk_active)
+            binding.holdToTalkButton.setTextColor(ContextCompat.getColor(this, R.color.white))
+            binding.holdToTalkButton.text = "............"
+            binding.holdToTalkButton.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, 0, 0)
+        } else {
+            binding.holdToTalkButton.setBackgroundResource(R.drawable.bg_chat_hold_to_talk)
+            binding.holdToTalkButton.setTextColor(ContextCompat.getColor(this, R.color.ink_900))
+            binding.holdToTalkButton.text = getString(R.string.voice_hold_to_talk)
+            binding.holdToTalkButton.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, 0, 0)
         }
     }
 
@@ -406,6 +637,9 @@ class MainActivity : AppCompatActivity() {
         binding.openAccessibilitySettingsButton.setOnClickListener {
             if (shouldBlockDemoOnboardingAction(DemoOnboardingStep.ACCESSIBILITY)) {
                 return@setOnClickListener
+            }
+            if (!DemoReleaseControl.isOnboardingCompleted()) {
+                DemoReleaseControl.markAccessibilityOnboardingSettingsOpened()
             }
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }
@@ -450,46 +684,84 @@ class MainActivity : AppCompatActivity() {
             runProcessExtraction()
         }
         binding.providerProfileValueText.setOnClickListener {
-            Snackbar.make(binding.root, getString(R.string.demo_settings_locked), Snackbar.LENGTH_SHORT).show()
+            showProviderProfileDialog()
         }
         binding.semanticModelValueText.setOnClickListener {
-            Snackbar.make(binding.root, getString(R.string.demo_settings_locked), Snackbar.LENGTH_SHORT).show()
+            showSemanticModelTierDialog()
         }
         binding.visionModelValueText.setOnClickListener {
-            Snackbar.make(binding.root, getString(R.string.demo_settings_locked), Snackbar.LENGTH_SHORT).show()
+            showQwenVisionModelDialog()
         }
         binding.searchProviderValueText.setOnClickListener {
-            Snackbar.make(binding.root, getString(R.string.demo_settings_locked), Snackbar.LENGTH_SHORT).show()
+            showSearchProviderDialog()
         }
-        binding.visionThinkingSwitch.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) {
-                binding.visionThinkingSwitch.isChecked = false
-            }
-            visionRequestThinkingSettingsStore.writeEnabled(false)
+        binding.voiceRecognitionModeValueText.setOnClickListener {
+            showVoiceRecognitionModeDialog()
+        }
+        binding.voiceCloudRegionValueText.setOnClickListener {
+            showVoiceCloudRegionDialog()
+        }
+        binding.voiceCloudCnProviderValueText.setOnClickListener {
+            showVoiceCnProviderDialog()
+        }
+        binding.voiceCloudTencentTtsVoiceValueText.setOnClickListener {
+            showTencentTtsVoiceDialog()
+        }
+        binding.voiceCloudGlobalProviderValueText.setOnClickListener {
+            showVoiceGlobalProviderDialog()
+        }
+        binding.voiceAutoSpeakValueText.setOnClickListener {
+            showVoiceAutoSpeakDialog()
+        }
+        binding.visionThinkingSwitch.setOnCheckedChangeListener { buttonView, isChecked ->
+            Log.d(
+                TOGGLE_TRACE_TAG,
+                "listener visionThinkingSwitch isChecked=$isChecked pressed=${buttonView.isPressed}"
+            )
+            val persisted = visionRequestThinkingSettingsStore.writeEnabled(isChecked)
+            Log.d(
+                TOGGLE_TRACE_TAG,
+                "listener visionThinkingSwitch storeWriteResult=$persisted"
+            )
             render(storeData)
         }
-        binding.visionSearchSwitch.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) {
-                binding.visionSearchSwitch.isChecked = false
-            }
-            visionRequestSearchSettingsStore.writeEnabled(false)
+        binding.visionSearchSwitch.setOnCheckedChangeListener { buttonView, isChecked ->
+            Log.d(
+                TOGGLE_TRACE_TAG,
+                "listener visionSearchSwitch isChecked=$isChecked pressed=${buttonView.isPressed}"
+            )
+            val persisted = visionRequestSearchSettingsStore.writeEnabled(isChecked)
+            Log.d(
+                TOGGLE_TRACE_TAG,
+                "listener visionSearchSwitch storeWriteResult=$persisted"
+            )
             render(storeData)
         }
     }
 
     private fun bindConversationOptionActions() {
-        binding.thinkingSwitch.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) {
-                binding.thinkingSwitch.isChecked = false
-            }
-            chatTurnOptions = chatTurnOptions.copy(thinkingEnabled = false)
+        binding.thinkingSwitch.setOnCheckedChangeListener { buttonView, isChecked ->
+            Log.d(
+                TOGGLE_TRACE_TAG,
+                "listener thinkingSwitch isChecked=$isChecked pressed=${buttonView.isPressed} before=${chatTurnOptions.thinkingEnabled}"
+            )
+            chatTurnOptions = chatTurnOptions.copy(thinkingEnabled = isChecked)
+            Log.d(
+                TOGGLE_TRACE_TAG,
+                "listener thinkingSwitch updated=${chatTurnOptions.thinkingEnabled} store=inMemory"
+            )
             render(storeData)
         }
-        binding.searchSwitch.setOnCheckedChangeListener { _, isChecked ->
-            if (!isChecked) {
-                binding.searchSwitch.isChecked = true
-            }
-            chatTurnOptions = chatTurnOptions.copy(searchEnabled = true)
+        binding.searchSwitch.setOnCheckedChangeListener { buttonView, isChecked ->
+            Log.d(
+                TOGGLE_TRACE_TAG,
+                "listener searchSwitch isChecked=$isChecked pressed=${buttonView.isPressed} before=${chatTurnOptions.searchEnabled}"
+            )
+            chatTurnOptions = chatTurnOptions.copy(searchEnabled = isChecked)
+            Log.d(
+                TOGGLE_TRACE_TAG,
+                "listener searchSwitch updated=${chatTurnOptions.searchEnabled} store=inMemory"
+            )
             render(storeData)
         }
     }
@@ -512,10 +784,7 @@ class MainActivity : AppCompatActivity() {
         binding.inputEditText.setText("")
         setLoading(true)
         lifecycleScope.launch {
-            val turnOptionsSnapshot = chatTurnOptions.copy(
-                thinkingEnabled = false,
-                searchEnabled = true
-            )
+            val turnOptionsSnapshot = chatTurnOptions.copy()
             when (
                 val result = chatTurnOrchestrator.submitMessage(
                     submittedInput = submittedInput,
@@ -545,6 +814,7 @@ class MainActivity : AppCompatActivity() {
                     pendingConversationMessages = emptyList()
                     storeData = result.updatedStore
                     render(storeData)
+                    maybeAutoSpeakLatestAssistantMessage(result.updatedStore)
                     result.executionMessage?.let { message ->
                         Snackbar.make(binding.root, message, Snackbar.LENGTH_SHORT).show()
                     }
@@ -562,6 +832,666 @@ class MainActivity : AppCompatActivity() {
             }
             setLoading(false)
         }
+    }
+
+    private fun startVoiceInput() {
+        if (isVoiceRecording) {
+            return
+        }
+        val settings = voiceRecognitionSettingsStore.read()
+        if (!asrRoutingClient.isConfigured(settings)) {
+            Snackbar.make(binding.root, getString(R.string.voice_input_not_configured), Snackbar.LENGTH_SHORT).show()
+            return
+        }
+        val hasPermission = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!hasPermission) {
+            recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            return
+        }
+        beginVoiceRecordingSession()
+    }
+
+    private fun beginVoiceRecordingSession() {
+        val sampleRate = 16000
+        val minBufferSize = AudioRecord.getMinBufferSize(
+            sampleRate,
+            AudioFormat.CHANNEL_IN_MONO,
+            AudioFormat.ENCODING_PCM_16BIT
+        )
+        if (minBufferSize <= 0) {
+            Snackbar.make(binding.root, getString(R.string.voice_input_not_supported), Snackbar.LENGTH_SHORT).show()
+            return
+        }
+        val recorder = buildVoiceRecorder(sampleRate, minBufferSize)
+        if (recorder.state != AudioRecord.STATE_INITIALIZED) {
+            recorder.release()
+            Snackbar.make(binding.root, getString(R.string.voice_input_not_supported), Snackbar.LENGTH_SHORT).show()
+            return
+        }
+        recordedPcmBuffer = ByteArrayOutputStream()
+        audioRecord = recorder
+        isVoiceRecording = true
+        voiceRecordingStartedAtMs = System.currentTimeMillis()
+        updateHoldToTalkVisual(isRecording = true)
+        binding.holdToTalkButton.alpha = 0.7f
+        recorder.startRecording()
+        voiceRecordJob = lifecycleScope.launch(Dispatchers.IO) {
+            val readBuffer = ByteArray(minBufferSize)
+            while (isVoiceRecording) {
+                val count = recorder.read(readBuffer, 0, readBuffer.size)
+                if (count > 0) {
+                    recordedPcmBuffer?.write(readBuffer, 0, count)
+                } else {
+                    delay(10)
+                }
+            }
+        }
+    }
+
+    private fun buildVoiceRecorder(sampleRate: Int, minBufferSize: Int): AudioRecord {
+        val sources = listOf(
+            MediaRecorder.AudioSource.VOICE_RECOGNITION,
+            MediaRecorder.AudioSource.MIC,
+            MediaRecorder.AudioSource.DEFAULT
+        )
+        val bufferSize = minBufferSize * 2
+        for (source in sources) {
+            val recorder = AudioRecord(
+                source,
+                sampleRate,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                bufferSize
+            )
+            if (recorder.state == AudioRecord.STATE_INITIALIZED) {
+                return recorder
+            }
+            recorder.release()
+        }
+        return AudioRecord(
+            MediaRecorder.AudioSource.MIC,
+            sampleRate,
+            AudioFormat.CHANNEL_IN_MONO,
+            AudioFormat.ENCODING_PCM_16BIT,
+            bufferSize
+        )
+    }
+
+    private fun stopVoiceRecordingSession(cancelOnly: Boolean) {
+        val recorder = audioRecord
+        if (recorder == null) {
+            isVoiceRecording = false
+            updateHoldToTalkVisual(isRecording = false)
+            binding.holdToTalkButton.alpha = 1f
+            return
+        }
+        isVoiceRecording = false
+        runCatching { recorder.stop() }
+        recorder.release()
+        audioRecord = null
+        voiceRecordJob?.cancel()
+        voiceRecordJob = null
+        updateHoldToTalkVisual(isRecording = false)
+        binding.holdToTalkButton.alpha = 1f
+        if (cancelOnly) {
+            recordedPcmBuffer = null
+            return
+        }
+        val recordingDurationMs = System.currentTimeMillis() - voiceRecordingStartedAtMs
+        if (recordingDurationMs < 300L) {
+            recordedPcmBuffer = null
+            Snackbar.make(binding.root, getString(R.string.voice_input_no_result), Snackbar.LENGTH_SHORT).show()
+            return
+        }
+        val pcmBytes = recordedPcmBuffer?.toByteArray() ?: byteArrayOf()
+        recordedPcmBuffer = null
+        if (pcmBytes.isEmpty()) {
+            Snackbar.make(binding.root, getString(R.string.voice_input_no_result), Snackbar.LENGTH_SHORT).show()
+            return
+        }
+        lifecycleScope.launch {
+            setLoading(true)
+            val transcriptResult = withContext(Dispatchers.IO) {
+                runCatching {
+                    val wav = pcmToWav(
+                        pcmBytes = pcmBytes,
+                        sampleRate = 16000,
+                        channels = 1,
+                        bitsPerSample = 16
+                    )
+                    asrRoutingClient.recognizeWav(wav, voiceRecognitionSettingsStore.read()).trim()
+                }
+            }
+            setLoading(false)
+            if (transcriptResult.isFailure) {
+                val message = transcriptResult.exceptionOrNull()?.message
+                    ?.take(140)
+                    .orEmpty()
+                    .ifBlank { getString(R.string.request_failed_generic) }
+                Log.e(VOICE_DEBUG_TAG, "Cloud ASR failed: $message", transcriptResult.exceptionOrNull())
+                Snackbar.make(
+                    binding.root,
+                    getString(R.string.voice_input_cloud_failed, message),
+                    Snackbar.LENGTH_LONG
+                ).show()
+                return@launch
+            }
+            val transcript = transcriptResult.getOrNull()
+            if (transcript.isNullOrBlank()) {
+                Snackbar.make(binding.root, getString(R.string.voice_input_no_result), Snackbar.LENGTH_SHORT).show()
+                return@launch
+            }
+            val existing = binding.inputEditText.text?.toString()?.trim().orEmpty()
+            val merged = if (existing.isBlank()) transcript else "$existing $transcript"
+            binding.inputEditText.setText(merged)
+            binding.inputEditText.setSelection(merged.length)
+            submitMessage()
+        }
+    }
+
+    private fun pcmToWav(
+        pcmBytes: ByteArray,
+        sampleRate: Int,
+        channels: Int,
+        bitsPerSample: Int
+    ): ByteArray {
+        val byteRate = sampleRate * channels * bitsPerSample / 8
+        val totalDataLen = pcmBytes.size + 36
+        val out = ByteArrayOutputStream()
+        out.write(byteArrayOf('R'.code.toByte(), 'I'.code.toByte(), 'F'.code.toByte(), 'F'.code.toByte()))
+        writeIntLE(out, totalDataLen)
+        out.write(byteArrayOf('W'.code.toByte(), 'A'.code.toByte(), 'V'.code.toByte(), 'E'.code.toByte()))
+        out.write(byteArrayOf('f'.code.toByte(), 'm'.code.toByte(), 't'.code.toByte(), ' '.code.toByte()))
+        writeIntLE(out, 16)
+        writeShortLE(out, 1)
+        writeShortLE(out, channels)
+        writeIntLE(out, sampleRate)
+        writeIntLE(out, byteRate)
+        writeShortLE(out, channels * bitsPerSample / 8)
+        writeShortLE(out, bitsPerSample)
+        out.write(byteArrayOf('d'.code.toByte(), 'a'.code.toByte(), 't'.code.toByte(), 'a'.code.toByte()))
+        writeIntLE(out, pcmBytes.size)
+        out.write(pcmBytes)
+        return out.toByteArray()
+    }
+
+    private fun writeIntLE(out: ByteArrayOutputStream, value: Int) {
+        out.write(value and 0xff)
+        out.write((value shr 8) and 0xff)
+        out.write((value shr 16) and 0xff)
+        out.write((value shr 24) and 0xff)
+    }
+
+    private fun writeShortLE(out: ByteArrayOutputStream, value: Int) {
+        out.write(value and 0xff)
+        out.write((value shr 8) and 0xff)
+    }
+
+    private fun startLocalVoiceInput() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+            putExtra(RecognizerIntent.EXTRA_PROMPT, getString(R.string.voice_input_prompt))
+        }
+        val canResolve = intent.resolveActivity(packageManager) != null
+        if (!canResolve) {
+            Snackbar.make(binding.root, getString(R.string.voice_input_not_supported), Snackbar.LENGTH_SHORT).show()
+            return
+        }
+        speechInputLauncher.launch(intent)
+    }
+
+    private fun showVoiceRecognitionModeDialog() {
+        val options = arrayOf(VoiceRecognitionMode.LOCAL, VoiceRecognitionMode.CLOUD)
+        val labels = arrayOf(
+            getString(R.string.settings_voice_mode_local),
+            getString(R.string.settings_voice_mode_cloud)
+        )
+        val current = voiceRecognitionSettingsStore.read()
+        var selected = options.indexOf(current.mode).takeIf { it >= 0 } ?: 0
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.settings_voice_mode_dialog_title)
+            .setSingleChoiceItems(labels, selected) { _, which -> selected = which }
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                voiceRecognitionSettingsStore.writeMode(options[selected])
+                render(storeData)
+                Snackbar.make(binding.root, getString(R.string.settings_voice_setting_updated), Snackbar.LENGTH_SHORT).show()
+            }
+            .show()
+    }
+
+    private fun showVoiceCloudRegionDialog() {
+        val current = voiceRecognitionSettingsStore.read()
+        if (current.mode != VoiceRecognitionMode.CLOUD) {
+            Snackbar.make(binding.root, getString(R.string.settings_voice_cloud_only_hint), Snackbar.LENGTH_SHORT).show()
+            return
+        }
+        val options = arrayOf(VoiceCloudRegion.CN, VoiceCloudRegion.GLOBAL)
+        val labels = arrayOf(
+            getString(R.string.settings_voice_cloud_region_cn),
+            getString(R.string.settings_voice_cloud_region_global)
+        )
+        var selected = options.indexOf(current.cloudRegion).takeIf { it >= 0 } ?: 0
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.settings_voice_cloud_region_dialog_title)
+            .setSingleChoiceItems(labels, selected) { _, which -> selected = which }
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                voiceRecognitionSettingsStore.writeCloudRegion(options[selected])
+                render(storeData)
+                Snackbar.make(binding.root, getString(R.string.settings_voice_setting_updated), Snackbar.LENGTH_SHORT).show()
+            }
+            .show()
+    }
+
+    private fun showVoiceCnProviderDialog() {
+        val current = voiceRecognitionSettingsStore.read()
+        if (current.mode != VoiceRecognitionMode.CLOUD || current.cloudRegion != VoiceCloudRegion.CN) {
+            Snackbar.make(binding.root, getString(R.string.settings_voice_provider_cn_only_hint), Snackbar.LENGTH_SHORT).show()
+            return
+        }
+        val options = arrayOf(VoiceCnProvider.TENCENT, VoiceCnProvider.ALI)
+        val labels = arrayOf(
+            getString(R.string.settings_voice_provider_tencent),
+            getString(R.string.settings_voice_provider_ali)
+        )
+        var selected = options.indexOf(current.cnProvider).takeIf { it >= 0 } ?: 0
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.settings_voice_cn_provider_dialog_title)
+            .setSingleChoiceItems(labels, selected) { _, which -> selected = which }
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                voiceRecognitionSettingsStore.writeCnProvider(options[selected])
+                render(storeData)
+                Snackbar.make(binding.root, getString(R.string.settings_voice_setting_updated), Snackbar.LENGTH_SHORT).show()
+            }
+            .show()
+    }
+
+    private fun showVoiceGlobalProviderDialog() {
+        val current = voiceRecognitionSettingsStore.read()
+        if (current.mode != VoiceRecognitionMode.CLOUD || current.cloudRegion != VoiceCloudRegion.GLOBAL) {
+            Snackbar.make(binding.root, getString(R.string.settings_voice_provider_global_only_hint), Snackbar.LENGTH_SHORT).show()
+            return
+        }
+        val options = arrayOf(VoiceGlobalProvider.DEEPGRAM, VoiceGlobalProvider.GOOGLE)
+        val labels = arrayOf(
+            getString(R.string.settings_voice_provider_deepgram),
+            getString(R.string.settings_voice_provider_google)
+        )
+        var selected = options.indexOf(current.globalProvider).takeIf { it >= 0 } ?: 0
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.settings_voice_global_provider_dialog_title)
+            .setSingleChoiceItems(labels, selected) { _, which -> selected = which }
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                voiceRecognitionSettingsStore.writeGlobalProvider(options[selected])
+                render(storeData)
+                Snackbar.make(binding.root, getString(R.string.settings_voice_setting_updated), Snackbar.LENGTH_SHORT).show()
+            }
+            .show()
+    }
+
+    private fun showTencentTtsVoiceDialog() {
+        val current = voiceRecognitionSettingsStore.read()
+        val isTencentCloud =
+            current.mode == VoiceRecognitionMode.CLOUD &&
+                current.cloudRegion == VoiceCloudRegion.CN &&
+                current.cnProvider == VoiceCnProvider.TENCENT
+        if (!isTencentCloud) {
+            Snackbar.make(binding.root, getString(R.string.settings_voice_tts_tencent_only_hint), Snackbar.LENGTH_SHORT).show()
+            return
+        }
+        val presetOptions = intArrayOf(
+            TENCENT_TTS_VOICE_BOY,
+            TENCENT_TTS_VOICE_GIRL,
+            TENCENT_TTS_VOICE_CHAT_CHILD,
+            TENCENT_TTS_VOICE_SOFT_BOY
+        )
+        val labels = arrayOf(
+            getString(R.string.settings_voice_tts_voice_boy),
+            getString(R.string.settings_voice_tts_voice_girl),
+            getString(R.string.settings_voice_tts_voice_chat_child),
+            getString(R.string.settings_voice_tts_voice_soft_boy)
+        )
+        val presetIndex = presetOptions.indexOf(current.tencentTtsVoiceType)
+        var selected = if (presetIndex >= 0) presetIndex else 0
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.settings_voice_tts_voice_dialog_title)
+            .setSingleChoiceItems(labels, selected) { _, which -> selected = which }
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                voiceRecognitionSettingsStore.writeTencentTtsVoiceType(presetOptions[selected])
+                render(storeData)
+                Snackbar.make(binding.root, getString(R.string.settings_voice_setting_updated), Snackbar.LENGTH_SHORT).show()
+            }
+            .show()
+    }
+
+    private fun showVoiceAutoSpeakDialog() {
+        val current = voiceRecognitionSettingsStore.read()
+        val options = booleanArrayOf(true, false)
+        val labels = arrayOf(
+            getString(R.string.settings_voice_auto_speak_on),
+            getString(R.string.settings_voice_auto_speak_off)
+        )
+        var selected = if (current.autoSpeakEnabled) 0 else 1
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.settings_voice_auto_speak_dialog_title)
+            .setSingleChoiceItems(labels, selected) { _, which -> selected = which }
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                voiceRecognitionSettingsStore.writeAutoSpeakEnabled(options[selected])
+                render(storeData)
+                Snackbar.make(binding.root, getString(R.string.settings_voice_setting_updated), Snackbar.LENGTH_SHORT).show()
+            }
+            .show()
+    }
+
+    private fun maybeAutoSpeakLatestAssistantMessage(store: PrototypeStoreData) {
+        val settings = voiceRecognitionSettingsStore.read()
+        if (!settings.autoSpeakEnabled) {
+            return
+        }
+        val latestAssistantMessage = store.messages.lastOrNull { message ->
+            message.role == MessageRole.ASSISTANT && message.content.isNotBlank()
+        } ?: return
+        if (latestAssistantMessage.id == lastAutoSpokenMessageId) {
+            return
+        }
+        lastAutoSpokenMessageId = latestAssistantMessage.id
+        speakMessage(latestAssistantMessage)
+    }
+
+    private fun handleSelectedImage(uri: Uri, fromCamera: Boolean) {
+        val source = if (fromCamera) {
+            getString(R.string.image_source_camera)
+        } else {
+            getString(R.string.image_source_gallery)
+        }
+        lifecycleScope.launch {
+            setLoading(true)
+            val imageDataUrl = withContext(Dispatchers.IO) { buildImageDataUrl(uri) }
+            val imageNarrative = if (imageDataUrl != null) {
+                withContext(Dispatchers.IO) {
+                    describeImageForConversation(imageDataUrl, source)
+                }
+            } else {
+                null
+            }
+            setLoading(false)
+            val currentInput = binding.inputEditText.text?.toString()?.trim().orEmpty()
+            val mergedInput = buildString {
+                if (currentInput.isNotBlank()) {
+                    append(currentInput).append('\n')
+                }
+                append(imageNarrative ?: getString(R.string.image_message_parse_fallback, source))
+            }
+            binding.inputEditText.setText(mergedInput)
+            binding.inputEditText.setSelection(mergedInput.length)
+            submitMessage()
+        }
+    }
+
+    private fun buildImageDataUrl(uri: Uri): String? {
+        return runCatching {
+            val bitmap = contentResolver.openInputStream(uri)?.use { input ->
+                BitmapFactory.decodeStream(input)
+            } ?: return null
+            val output = ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 90, output)
+            val payload = android.util.Base64.encodeToString(output.toByteArray(), android.util.Base64.NO_WRAP)
+            "data:image/jpeg;base64,$payload"
+        }.getOrNull()
+    }
+
+    private fun describeImageForConversation(imageDataUrl: String, source: String): String {
+        if (!semanticClient.isConfigured()) {
+            return getString(R.string.image_message_parse_fallback, source)
+        }
+        return runCatching {
+            val promptMessages = listOf(
+                PromptMessage(
+                    role = "system",
+                    content = "You are a visual assistant. Output JSON only: {\"reply\":\"...\"}."
+                ),
+                PromptMessage(
+                    role = "user",
+                    content = "请总结这张图片",
+                    contentParts = listOf(
+                        PromptContentPart(
+                            type = "text",
+                            text = "请用中文简洁总结这张图片，并提取关键视觉信息。"
+                        ),
+                        PromptContentPart(
+                            type = "image_url",
+                            imageDataUrl = imageDataUrl
+                        )
+                    )
+                )
+            )
+            val rawResponse = semanticClient.requestPromptMessages(
+                promptMessages = promptMessages,
+                requestConfig = SemanticPrototypeClient.PromptRequestConfig(
+                    temperature = 0.2,
+                    topP = 0.85,
+                    maxTokens = 600,
+                    requestTag = "image_multimodal_summary"
+                )
+            )
+            val content = org.json.JSONObject(rawResponse)
+                .optJSONArray("choices")
+                ?.optJSONObject(0)
+                ?.optJSONObject("message")
+                ?.optString("content")
+                .orEmpty()
+            val reply = runCatching {
+                org.json.JSONObject(content).optString("reply")
+            }.getOrNull().orEmpty().trim()
+            val normalized = if (reply.isNotBlank()) reply else content.trim()
+            if (normalized.isBlank()) {
+                getString(R.string.image_message_parse_fallback, source)
+            } else {
+                getString(R.string.image_message_parse_template, source, normalized)
+            }
+        }.getOrElse {
+            getString(R.string.image_message_parse_fallback, source)
+        }
+    }
+
+    private fun saveCapturedBitmap(bitmap: Bitmap): Uri? {
+        return runCatching {
+            val file = File(cacheDir, "captured_${System.currentTimeMillis()}.jpg")
+            FileOutputStream(file).use { output ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 90, output)
+            }
+            Uri.fromFile(file)
+        }.getOrNull()
+    }
+
+    private fun initTextToSpeech() {
+        textToSpeech = TextToSpeech(this) { status ->
+            if (status != TextToSpeech.SUCCESS) {
+                ttsReady = false
+                return@TextToSpeech
+            }
+            val tts = textToSpeech ?: return@TextToSpeech
+            val languageResult = tts.setLanguage(Locale.getDefault())
+            ttsReady = languageResult != TextToSpeech.LANG_MISSING_DATA && languageResult != TextToSpeech.LANG_NOT_SUPPORTED
+        }
+    }
+
+    private fun speakMessage(message: ChatMessage) {
+        val text = message.content.trim()
+        if (text.isBlank()) {
+            Snackbar.make(binding.root, getString(R.string.message_action_speak_empty), Snackbar.LENGTH_SHORT).show()
+            return
+        }
+        val settings = voiceRecognitionSettingsStore.read()
+        if (settings.mode == VoiceRecognitionMode.CLOUD) {
+            speakMessageWithCloudTts(text, settings)
+            return
+        }
+        val tts = textToSpeech
+        if (!ttsReady || tts == null) {
+            Snackbar.make(binding.root, getString(R.string.message_action_tts_unavailable), Snackbar.LENGTH_SHORT).show()
+            return
+        }
+        tts.stop()
+        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "message_${message.id}")
+    }
+
+    private fun speakMessageWithCloudTts(text: String, settings: VoiceRecognitionSettings) {
+        val providerLabel = resolveCloudProviderLabel(settings)
+        when (settings.cloudRegion) {
+            VoiceCloudRegion.CN -> {
+                when (settings.cnProvider) {
+                    VoiceCnProvider.TENCENT -> {
+                        if (!tencentTtsClient.isConfigured()) {
+                            Snackbar.make(
+                                binding.root,
+                                getString(R.string.message_action_tts_cloud_not_configured, providerLabel),
+                                Snackbar.LENGTH_SHORT
+                            ).show()
+                            return
+                        }
+                        textToSpeech?.stop()
+                        cloudTtsJob?.cancel()
+                        cloudTtsJob = lifecycleScope.launch {
+                            runCatching {
+                                withContext(Dispatchers.IO) {
+                                    tencentTtsClient.synthesizeMp3(
+                                        text = text,
+                                        voiceType = settings.tencentTtsVoiceType
+                                    )
+                                }
+                            }.onSuccess { audioBytes ->
+                                playCloudTtsAudio(audioBytes)
+                            }.onFailure { error ->
+                                Log.e(VOICE_DEBUG_TAG, "Cloud TTS failed", error)
+                                val reason = error.message?.takeIf { it.isNotBlank() }
+                                    ?: getString(R.string.request_failed_generic)
+                                Snackbar.make(
+                                    binding.root,
+                                    getString(R.string.message_action_tts_cloud_failed, reason),
+                                    Snackbar.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                    }
+
+                    VoiceCnProvider.ALI -> {
+                        Snackbar.make(
+                            binding.root,
+                            getString(R.string.message_action_tts_cloud_not_ready, providerLabel),
+                            Snackbar.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            }
+
+            VoiceCloudRegion.GLOBAL -> {
+                Snackbar.make(
+                    binding.root,
+                    getString(R.string.message_action_tts_cloud_not_ready, providerLabel),
+                    Snackbar.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    private fun resolveCloudProviderLabel(settings: VoiceRecognitionSettings): String {
+        return when (settings.cloudRegion) {
+            VoiceCloudRegion.CN -> when (settings.cnProvider) {
+                VoiceCnProvider.TENCENT -> getString(R.string.settings_voice_provider_tencent)
+                VoiceCnProvider.ALI -> getString(R.string.settings_voice_provider_ali)
+            }
+
+            VoiceCloudRegion.GLOBAL -> when (settings.globalProvider) {
+                VoiceGlobalProvider.DEEPGRAM -> getString(R.string.settings_voice_provider_deepgram)
+                VoiceGlobalProvider.GOOGLE -> getString(R.string.settings_voice_provider_google)
+            }
+        }
+    }
+
+    private fun playCloudTtsAudio(audioBytes: ByteArray) {
+        runCatching {
+            cloudTtsPlayer?.stop()
+            cloudTtsPlayer?.reset()
+            cloudTtsPlayer?.release()
+            cloudTtsPlayer = null
+
+            cloudTtsTempFile?.delete()
+            val file = File(cacheDir, "tts_${System.currentTimeMillis()}.mp3")
+            FileOutputStream(file).use { output ->
+                output.write(audioBytes)
+            }
+            cloudTtsTempFile = file
+
+            val player = MediaPlayer().apply {
+                setDataSource(file.absolutePath)
+                setOnCompletionListener { mp ->
+                    mp.reset()
+                    mp.release()
+                    if (cloudTtsPlayer === mp) {
+                        cloudTtsPlayer = null
+                    }
+                    cloudTtsTempFile?.delete()
+                    cloudTtsTempFile = null
+                }
+                setOnErrorListener { mp, _, _ ->
+                    mp.reset()
+                    mp.release()
+                    if (cloudTtsPlayer === mp) {
+                        cloudTtsPlayer = null
+                    }
+                    cloudTtsTempFile?.delete()
+                    cloudTtsTempFile = null
+                    false
+                }
+                prepare()
+                start()
+            }
+            cloudTtsPlayer = player
+        }.onFailure { error ->
+            Log.e(VOICE_DEBUG_TAG, "Play cloud TTS audio failed", error)
+            val reason = error.message?.takeIf { it.isNotBlank() }
+                ?: getString(R.string.request_failed_generic)
+            Snackbar.make(
+                binding.root,
+                getString(R.string.message_action_tts_cloud_failed, reason),
+                Snackbar.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    private fun copyMessage(message: ChatMessage) {
+        val text = message.content.trim()
+        if (text.isBlank()) {
+            Snackbar.make(binding.root, getString(R.string.message_action_copy_empty), Snackbar.LENGTH_SHORT).show()
+            return
+        }
+        val clipboard = getSystemService(ClipboardManager::class.java)
+        clipboard?.setPrimaryClip(ClipData.newPlainText(getString(R.string.app_name), text))
+        Snackbar.make(binding.root, getString(R.string.message_action_copy_done), Snackbar.LENGTH_SHORT).show()
+    }
+
+    private fun forwardMessage(message: ChatMessage) {
+        val text = message.content.trim()
+        if (text.isBlank()) {
+            Snackbar.make(binding.root, getString(R.string.message_action_forward_empty), Snackbar.LENGTH_SHORT).show()
+            return
+        }
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+        }
+        startActivity(Intent.createChooser(shareIntent, getString(R.string.message_action_forward_title)))
     }
 
     private fun updatePendingConversation(messages: List<ChatMessage>) {
@@ -643,12 +1573,8 @@ class MainActivity : AppCompatActivity() {
     private fun render(store: PrototypeStoreData) {
         val runtimePreferences = store.resolveSemanticRuntimePreferences() ?: SemanticRuntimePreferences()
         val constrainedTurnOptions = coerceSemanticTurnOptions(runtimePreferences, chatTurnOptions)
-        val demoFixedTurnOptions = constrainedTurnOptions.copy(
-            thinkingEnabled = false,
-            searchEnabled = true
-        )
-        if (demoFixedTurnOptions != chatTurnOptions) {
-            chatTurnOptions = demoFixedTurnOptions
+        if (constrainedTurnOptions != chatTurnOptions) {
+            chatTurnOptions = constrainedTurnOptions
         }
         syncingShizukuAutoPrepareSwitch = true
         try {
@@ -667,12 +1593,14 @@ class MainActivity : AppCompatActivity() {
         } finally {
             syncingShizukuAutoPrepareSwitch = false
         }
-        binding.composerInputLayout.hint = getString(R.string.message_hint)
+        binding.inputEditText.hint = getString(R.string.message_hint)
+        refreshComposerActionButtons()
         refreshLanguageCard()
         val loading = binding.loadingRow.visibility == View.VISIBLE
         refreshConversationControlAvailability(store, loading)
         refreshVisionControlAvailability(loading)
         refreshSearchProviderAvailability(loading = loading)
+        refreshVoiceSettingAvailability(loading)
         refreshDemoOnboardingUi(force = false)
     }
 
@@ -683,7 +1611,11 @@ class MainActivity : AppCompatActivity() {
         } else {
             stopLoadingAnimation()
         }
-        binding.sendButton.isEnabled = !loading
+        binding.inputModeToggleButton.isEnabled = !loading
+        binding.holdToTalkButton.isEnabled = !loading
+        binding.pickImageButton.isEnabled = !loading
+        binding.sendMessageButton.isEnabled = !loading
+        binding.captureImageButton.isEnabled = !loading
         binding.inputEditText.isEnabled = !loading
         binding.processReviewInputEditText.isEnabled = !loading
         refreshConversationControlAvailability(storeData, loading)
@@ -691,10 +1623,11 @@ class MainActivity : AppCompatActivity() {
         binding.processThumbsUpButton.isEnabled = !loading
         binding.processThumbsDownButton.isEnabled = !loading
         binding.captureCompressionValueText.isEnabled = !loading
-        binding.providerProfileValueText.isEnabled = false
-        binding.semanticModelValueText.isEnabled = false
-        binding.visionModelValueText.isEnabled = false
+        binding.providerProfileValueText.isEnabled = !loading
+        binding.semanticModelValueText.isEnabled = !loading
+        binding.visionModelValueText.isEnabled = !loading
         refreshSearchProviderAvailability(loading)
+        refreshVoiceSettingAvailability(loading)
         binding.runToolDiscoveryButton.isEnabled = !loading
         binding.runPreferenceDiscoveryButton.isEnabled = !loading
         binding.runPreferenceExtractionButton.isEnabled = !loading
@@ -710,17 +1643,13 @@ class MainActivity : AppCompatActivity() {
         store: PrototypeStoreData,
         loading: Boolean
     ) {
-        binding.thinkingSwitch.isEnabled = false
-        binding.searchSwitch.isEnabled = false
-        binding.thinkingSwitch.isChecked = false
-        binding.searchSwitch.isChecked = true
+        binding.thinkingSwitch.isEnabled = !loading
+        binding.searchSwitch.isEnabled = !loading
     }
 
     private fun refreshVisionControlAvailability(loading: Boolean) {
-        binding.visionThinkingSwitch.isEnabled = false
-        binding.visionSearchSwitch.isEnabled = false
-        binding.visionThinkingSwitch.isChecked = false
-        binding.visionSearchSwitch.isChecked = false
+        binding.visionThinkingSwitch.isEnabled = !loading
+        binding.visionSearchSwitch.isEnabled = !loading
     }
 
     private fun loadingAnimationFrames(): Array<String> {
@@ -778,11 +1707,49 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshSearchProviderAvailability(loading: Boolean) {
-        val searchProviderEditable = false
+        val searchProviderEditable = !loading
         binding.searchProviderValueText.isEnabled = searchProviderEditable
         binding.searchProviderValueText.isClickable = searchProviderEditable
         binding.searchProviderValueText.isFocusable = searchProviderEditable
         binding.searchProviderValueText.alpha = if (searchProviderEditable) 1f else 0.5f
+    }
+
+    private fun refreshVoiceSettingAvailability(loading: Boolean) {
+        val settings = voiceRecognitionSettingsStore.read()
+        val canEdit = !loading
+        binding.voiceRecognitionModeValueText.isEnabled = canEdit
+        binding.voiceRecognitionModeValueText.isClickable = canEdit
+        binding.voiceRecognitionModeValueText.isFocusable = canEdit
+        binding.voiceRecognitionModeValueText.alpha = if (canEdit) 1f else 0.5f
+
+        val regionEditable = canEdit && settings.mode == VoiceRecognitionMode.CLOUD
+        binding.voiceCloudRegionValueText.isEnabled = regionEditable
+        binding.voiceCloudRegionValueText.isClickable = regionEditable
+        binding.voiceCloudRegionValueText.isFocusable = regionEditable
+        binding.voiceCloudRegionValueText.alpha = if (regionEditable) 1f else 0.5f
+
+        val cnEditable = regionEditable && settings.cloudRegion == VoiceCloudRegion.CN
+        binding.voiceCloudCnProviderValueText.isEnabled = cnEditable
+        binding.voiceCloudCnProviderValueText.isClickable = cnEditable
+        binding.voiceCloudCnProviderValueText.isFocusable = cnEditable
+        binding.voiceCloudCnProviderValueText.alpha = if (cnEditable) 1f else 0.5f
+
+        val tencentVoiceEditable = cnEditable && settings.cnProvider == VoiceCnProvider.TENCENT
+        binding.voiceCloudTencentTtsVoiceValueText.isEnabled = tencentVoiceEditable
+        binding.voiceCloudTencentTtsVoiceValueText.isClickable = tencentVoiceEditable
+        binding.voiceCloudTencentTtsVoiceValueText.isFocusable = tencentVoiceEditable
+        binding.voiceCloudTencentTtsVoiceValueText.alpha = if (tencentVoiceEditable) 1f else 0.5f
+
+        val globalEditable = regionEditable && settings.cloudRegion == VoiceCloudRegion.GLOBAL
+        binding.voiceCloudGlobalProviderValueText.isEnabled = globalEditable
+        binding.voiceCloudGlobalProviderValueText.isClickable = globalEditable
+        binding.voiceCloudGlobalProviderValueText.isFocusable = globalEditable
+        binding.voiceCloudGlobalProviderValueText.alpha = if (globalEditable) 1f else 0.5f
+
+        binding.voiceAutoSpeakValueText.isEnabled = canEdit
+        binding.voiceAutoSpeakValueText.isClickable = canEdit
+        binding.voiceAutoSpeakValueText.isFocusable = canEdit
+        binding.voiceAutoSpeakValueText.alpha = if (canEdit) 1f else 0.5f
     }
 
     private fun startLoadingAnimation() {
@@ -864,6 +1831,7 @@ class MainActivity : AppCompatActivity() {
             clearDemoHighlightAnimation()
             return
         }
+        maybeCompleteAccessibilityOnboardingStep()
         val resolvedStep = resolveDemoOnboardingStep()
         if (!force && resolvedStep == demoOnboardingStep) {
             return
@@ -894,16 +1862,32 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun resolveDemoOnboardingStep(): DemoOnboardingStep {
-        if (toolspaceCatalogManager.getSnapshot().updatedAt == null) {
+        if (!DemoReleaseControl.isToolDiscoveryOnboardingCompleted()) {
             return DemoOnboardingStep.TOOL_DISCOVERY
         }
-        if (!isAccessibilityServiceEnabledForDemo()) {
+        if (!DemoReleaseControl.isAccessibilityOnboardingCompleted()) {
             return DemoOnboardingStep.ACCESSIBILITY
         }
-        if (!screenCaptureManager.hasPermission()) {
+        if (!DemoReleaseControl.isScreenCaptureOnboardingCompleted()) {
             return DemoOnboardingStep.SCREEN_CAPTURE
         }
         return DemoOnboardingStep.DONE
+    }
+
+    private fun maybeCompleteAccessibilityOnboardingStep() {
+        if (DemoReleaseControl.isOnboardingCompleted()) {
+            return
+        }
+        if (DemoReleaseControl.isAccessibilityOnboardingCompleted()) {
+            return
+        }
+        if (!DemoReleaseControl.hasOpenedAccessibilityOnboardingSettings()) {
+            return
+        }
+        if (!isAccessibilityServiceEnabledForDemo()) {
+            return
+        }
+        DemoReleaseControl.markAccessibilityOnboardingCompleted()
     }
 
     private fun isAccessibilityServiceEnabledForDemo(): Boolean {
@@ -1136,6 +2120,9 @@ class MainActivity : AppCompatActivity() {
                     toolspaceCatalogManager.refreshFromDevice()
                 }
             }.onSuccess {
+                if (!DemoReleaseControl.isOnboardingCompleted()) {
+                    DemoReleaseControl.markToolDiscoveryOnboardingCompleted()
+                }
                 currentSurface = MainSurface.SETTINGS
                 render(storeData)
                 refreshDemoOnboardingUi(force = true)
@@ -1150,9 +2137,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun showSearchProviderDialog() {
         val currentConfig = ProviderProfileRuntime.current()
-        if (currentConfig.profileId != ProviderProfileId.CUSTOM) {
-            return
-        }
         val providerOptions = arrayOf(
             SearchProviderKind.ALIYUN_OPENSEARCH,
             SearchProviderKind.GOOGLE_CSE
@@ -1176,9 +2160,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateSearchProvider(provider: SearchProviderKind) {
         val currentConfig = ProviderProfileRuntime.current()
-        if (currentConfig.profileId != ProviderProfileId.CUSTOM) {
-            return
-        }
         if (currentConfig.search.provider == provider) {
             return
         }

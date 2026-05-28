@@ -498,7 +498,7 @@ private const val KEY_SEARCH_SAFE = "search_safe"
 
 internal object ProviderProfileRuntime {
     @Volatile
-    private var config: ProviderProfileRuntimeConfig = buildLockedDemoProfileFromBuildConfig()
+    private var config: ProviderProfileRuntimeConfig = defaultDomesticProfileFromBuildConfig()
 
     fun current(): ProviderProfileRuntimeConfig = config
 
@@ -515,13 +515,18 @@ internal class ProviderProfileSettingsStore(context: Context) {
     )
 
     fun readConfig(): ProviderProfileRuntimeConfig {
-        val locked = buildLockedDemoProfileFromBuildConfig()
-        writeConfig(locked)
-        return locked
+        val schemaVersion = prefs.getInt(KEY_SCHEMA_VERSION, 0)
+        val config = if (schemaVersion == CURRENT_SCHEMA_VERSION) {
+            readCurrentSchemaConfig()
+        } else {
+            migrateLegacyConfigIfNeeded()
+        }
+        ProviderProfileRuntime.update(config)
+        return config
     }
 
     fun writeConfig(config: ProviderProfileRuntimeConfig): ProviderProfileRuntimeConfig {
-        val normalized = buildLockedDemoProfileFromBuildConfig()
+        val normalized = config.copy(schemaVersion = CURRENT_SCHEMA_VERSION)
         prefs.edit()
             .putInt(KEY_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION)
             .putString(KEY_PROFILE_ID, normalized.profileId.name)
@@ -547,10 +552,7 @@ internal class ProviderProfileSettingsStore(context: Context) {
     }
 
     fun applyStoredConfig(): ProviderProfileRuntimeConfig {
-        val stored = buildLockedDemoProfileFromBuildConfig()
-        writeConfig(stored)
-        ProviderProfileRuntime.update(stored)
-        return stored
+        return readConfig()
     }
 
     private fun migrateLegacyConfigIfNeeded(): ProviderProfileRuntimeConfig {
@@ -565,6 +567,7 @@ internal class ProviderProfileSettingsStore(context: Context) {
         val regionMode = prefs.getString(KEY_REGION_MODE, null)
             ?.toRegionModeOrNull()
             ?: RegionMode.DOMESTIC
+        val isCustomProfile = profileId == ProviderProfileId.CUSTOM
 
         val fallback = when (profileId) {
             ProviderProfileId.GLOBAL_DEFAULT -> defaultGlobalProfileFromBuildConfig()
@@ -578,18 +581,30 @@ internal class ProviderProfileSettingsStore(context: Context) {
         val semanticProvider = prefs.getString(KEY_SEMANTIC_PROVIDER, null)
             ?.toSemanticProviderKindOrNull()
             ?: fallback.semantic.provider
-        val semanticFastModel = prefs.getString(KEY_SEMANTIC_FAST_MODEL, null)
-            ?.trim()
-            ?.takeIf { value -> value.isNotBlank() }
-            ?: fallback.semantic.fastModel
-        val semanticExpertModel = prefs.getString(KEY_SEMANTIC_EXPERT_MODEL, null)
-            ?.trim()
-            ?.takeIf { value -> value.isNotBlank() }
-            ?: fallback.semantic.expertModel
-        val semanticEndpoint = prefs.getString(KEY_SEMANTIC_ENDPOINT, null)
-            ?.trim()
-            ?.takeIf { value -> value.isNotBlank() }
-            ?: fallback.semantic.endpoint
+        val semanticFastModel = if (isCustomProfile) {
+            prefs.getString(KEY_SEMANTIC_FAST_MODEL, null)
+                ?.trim()
+                ?.takeIf { value -> value.isNotBlank() }
+                ?: fallback.semantic.fastModel
+        } else {
+            fallback.semantic.fastModel
+        }
+        val semanticExpertModel = if (isCustomProfile) {
+            prefs.getString(KEY_SEMANTIC_EXPERT_MODEL, null)
+                ?.trim()
+                ?.takeIf { value -> value.isNotBlank() }
+                ?: fallback.semantic.expertModel
+        } else {
+            fallback.semantic.expertModel
+        }
+        val semanticEndpoint = if (isCustomProfile) {
+            prefs.getString(KEY_SEMANTIC_ENDPOINT, null)
+                ?.trim()
+                ?.takeIf { value -> value.isNotBlank() }
+                ?: fallback.semantic.endpoint
+        } else {
+            fallback.semantic.endpoint
+        }
 
         val visionProvider = prefs.getString(KEY_VISION_PROVIDER, null)
             ?.toVisionProviderKindOrNull()
@@ -597,15 +612,15 @@ internal class ProviderProfileSettingsStore(context: Context) {
         val legacyVisionModel = prefs.getString(KEY_VISION_MODEL, null)
             ?.trim()
             ?.takeIf { value -> value.isNotBlank() }
-        val visionFastModel = prefs.getString(KEY_VISION_FAST_MODEL, null)
-            ?.trim()
-            ?.takeIf { value -> value.isNotBlank() }
-            ?: if (profileId == ProviderProfileId.CUSTOM) {
-                legacyVisionModel ?: fallback.vision.model
-            } else {
-                fallback.vision.fastModel
-            }
-        val normalizedVisionFastModel = if (profileId == ProviderProfileId.CUSTOM) {
+        val visionFastModel = if (isCustomProfile) {
+            prefs.getString(KEY_VISION_FAST_MODEL, null)
+                ?.trim()
+                ?.takeIf { value -> value.isNotBlank() }
+                ?: (legacyVisionModel ?: fallback.vision.model)
+        } else {
+            fallback.vision.fastModel
+        }
+        val normalizedVisionFastModel = if (isCustomProfile) {
             normalizeVisionCustomModelSelection(
                 value = visionFastModel,
                 fallback = CUSTOM_VISION_MODEL_OPTIONS.first()
@@ -613,15 +628,15 @@ internal class ProviderProfileSettingsStore(context: Context) {
         } else {
             visionFastModel
         }
-        val visionExpertModel = prefs.getString(KEY_VISION_EXPERT_MODEL, null)
-            ?.trim()
-            ?.takeIf { value -> value.isNotBlank() }
-            ?: if (profileId == ProviderProfileId.CUSTOM) {
-                legacyVisionModel ?: fallback.vision.model
-            } else {
-                fallback.vision.expertModel
-            }
-        val normalizedVisionExpertModel = if (profileId == ProviderProfileId.CUSTOM) {
+        val visionExpertModel = if (isCustomProfile) {
+            prefs.getString(KEY_VISION_EXPERT_MODEL, null)
+                ?.trim()
+                ?.takeIf { value -> value.isNotBlank() }
+                ?: (legacyVisionModel ?: fallback.vision.model)
+        } else {
+            fallback.vision.expertModel
+        }
+        val normalizedVisionExpertModel = if (isCustomProfile) {
             normalizeVisionCustomModelSelection(
                 value = visionExpertModel,
                 fallback = normalizedVisionFastModel
@@ -637,32 +652,44 @@ internal class ProviderProfileSettingsStore(context: Context) {
                 expertModel = normalizedVisionExpertModel,
                 fallback = fallback.vision.modelTier
             )
-        val visionEndpoint = prefs.getString(KEY_VISION_ENDPOINT, null)
-            ?.trim()
-            ?.takeIf { value -> value.isNotBlank() }
-            ?: fallback.vision.endpoint
+        val visionEndpoint = if (isCustomProfile) {
+            prefs.getString(KEY_VISION_ENDPOINT, null)
+                ?.trim()
+                ?.takeIf { value -> value.isNotBlank() }
+                ?: fallback.vision.endpoint
+        } else {
+            fallback.vision.endpoint
+        }
 
-        val searchProvider = prefs.getString(KEY_SEARCH_PROVIDER, null)
-            ?.toSearchProviderKindOrNull()
-            ?: fallback.search.provider
-        val searchEndpoint = prefs.getString(KEY_SEARCH_ENDPOINT, null)
-            ?.trim()
-            ?.takeIf { value -> value.isNotBlank() }
-            ?: fallback.search.endpoint
+        val searchProvider = if (isCustomProfile) {
+            prefs.getString(KEY_SEARCH_PROVIDER, null)
+                ?.toSearchProviderKindOrNull()
+                ?: fallback.search.provider
+        } else {
+            fallback.search.provider
+        }
+        val searchEndpoint = if (isCustomProfile) {
+            prefs.getString(KEY_SEARCH_ENDPOINT, null)
+                ?.trim()
+                ?.takeIf { value -> value.isNotBlank() }
+                ?: fallback.search.endpoint
+        } else {
+            fallback.search.endpoint
+        }
 
         return ProviderProfileRuntimeConfig(
             profileId = profileId,
             regionMode = regionMode,
             semantic = SemanticProviderRuntimeConfig(
-                provider = semanticProvider,
-                apiKey = resolveSemanticApiKey(semanticProvider),
+                provider = if (isCustomProfile) semanticProvider else fallback.semantic.provider,
+                apiKey = resolveSemanticApiKey(if (isCustomProfile) semanticProvider else fallback.semantic.provider),
                 endpoint = semanticEndpoint,
                 fastModel = semanticFastModel,
                 expertModel = semanticExpertModel
             ),
             vision = VisionProviderRuntimeConfig(
-                provider = visionProvider,
-                apiKey = resolveVisionApiKey(visionProvider),
+                provider = if (isCustomProfile) visionProvider else fallback.vision.provider,
+                apiKey = resolveVisionApiKey(if (isCustomProfile) visionProvider else fallback.vision.provider),
                 endpoint = visionEndpoint,
                 fastModel = normalizedVisionFastModel,
                 expertModel = normalizedVisionExpertModel,

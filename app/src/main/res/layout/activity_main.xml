@@ -72,9 +72,8 @@
 
         <TextView
             android:id="@+id/accStatusText"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:text="@string/status_accessibility_off"
             android:textColor="@color/slate_500"
             android:textSize="11sp" />
@@ -85,15 +84,6 @@
             android:layout_height="wrap_content"
             android:paddingStart="6dp"
             android:text="@string/status_capture_off"
-            android:textColor="@color/slate_500"
-            android:textSize="11sp" />
-
-        <TextView
-            android:id="@+id/usageAccessStatusText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingStart="6dp"
-            android:text="@string/status_usage_access_off"
             android:textColor="@color/slate_500"
             android:textSize="11sp" />
 
@@ -166,6 +156,7 @@
                 android:fillViewport="true">
 
                 <LinearLayout
+                    android:id="@+id/settingsCardsContainer"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical">
@@ -726,9 +717,206 @@
                     android:textSize="11sp" />
 
                 <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/automationSettingsCard"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="14dp"
+                    app:cardBackgroundColor="@color/panel_0"
+                    app:cardCornerRadius="20dp"
+                    app:cardElevation="0dp"
+                    app:strokeColor="@color/sand_100"
+                    app:strokeWidth="1dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="14dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="sans-serif-medium"
+                            android:text="@string/settings_one_off_title"
+                            android:textColor="@color/ink_900"
+                            android:textSize="12sp" />
+
+                        <TextView
+                            android:id="@+id/scanAppsValueText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:textColor="@color/ink_900"
+                            android:textSize="12sp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/runToolDiscoveryButton"
+                            style="@style/AppButton.Fixed"
+                            android:layout_width="match_parent"
+                            android:layout_height="44dp"
+                            android:layout_marginTop="6dp"
+                            android:text="@string/run_tool_discovery_scan"
+                            app:backgroundTint="@color/clay_500" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:layout_marginBottom="10dp"
+                    app:cardBackgroundColor="@color/panel_0"
+                    app:cardCornerRadius="20dp"
+                    app:cardElevation="0dp"
+                    app:strokeColor="@color/sand_100"
+                    app:strokeWidth="1dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="14dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="sans-serif-medium"
+                            android:text="@string/permission_controls_title"
+                            android:textColor="@color/ink_900"
+                            android:textSize="12sp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:text="@string/permission_controls_body"
+                            android:textColor="@color/slate_500"
+                            android:textSize="11sp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/openAccessibilitySettingsButton"
+                            style="@style/AppButton.Fixed"
+                            android:layout_width="match_parent"
+                            android:layout_height="44dp"
+                            android:layout_marginTop="10dp"
+                            android:text="@string/open_accessibility_settings"
+                            app:backgroundTint="@color/clay_500" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:text="@string/settings_capture_compression_label"
+                            android:textColor="@color/slate_500"
+                            android:textSize="11sp" />
+
+                        <TextView
+                            android:id="@+id/captureCompressionValueText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:textColor="@color/ink_900"
+                            android:textSize="12sp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/requestScreenCaptureButton"
+                            style="@style/AppButton.Fixed"
+                            android:layout_width="match_parent"
+                            android:layout_height="44dp"
+                            android:layout_marginTop="6dp"
+                            android:text="@string/request_capture_permission"
+                            app:backgroundTint="@color/slate_500" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/openUsageAccessSettingsButton"
+                            style="@style/AppButton.Fixed"
+                            android:layout_width="match_parent"
+                            android:layout_height="44dp"
+                            android:layout_marginTop="6dp"
+                            android:text="@string/open_usage_access_settings"
+                            app:backgroundTint="@color/moss_500" />
+
+                        <LinearLayout
+                            android:id="@+id/shizukuSettingsGroup"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="16dp"
+                            android:orientation="vertical"
+                            android:visibility="gone">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="sans-serif-medium"
+                                android:text="@string/settings_shizuku_title"
+                                android:textColor="@color/ink_900"
+                                android:textSize="12sp" />
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="4dp"
+                                android:text="@string/settings_shizuku_body"
+                                android:textColor="@color/slate_500"
+                                android:textSize="11sp" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="10dp"
+                                android:text="@string/settings_shizuku_status_label"
+                                android:textColor="@color/slate_500"
+                                android:textSize="11sp" />
+
+                            <TextView
+                                android:id="@+id/shizukuSettingsStatusText"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="4dp"
+                                android:textColor="@color/ink_900"
+                                android:textSize="12sp" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="10dp"
+                                android:text="@string/settings_shizuku_last_bootstrap_label"
+                                android:textColor="@color/slate_500"
+                                android:textSize="11sp" />
+
+                            <TextView
+                                android:id="@+id/shizukuLastBootstrapText"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="4dp"
+                                android:textColor="@color/ink_900"
+                                android:textSize="12sp" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/prepareWithShizukuButton"
+                                style="@style/AppButton.Fixed"
+                                android:layout_width="match_parent"
+                                android:layout_height="44dp"
+                                android:layout_marginTop="10dp"
+                                android:text="@string/prepare_with_shizuku"
+                                app:backgroundTint="@color/moss_500" />
+
+                            <com.google.android.material.switchmaterial.SwitchMaterial
+                                android:id="@+id/shizukuAutoPrepareSwitch"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="8dp"
+                                android:text="@string/settings_shizuku_auto_prepare"
+                                android:textColor="@color/ink_900"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
                     app:cardBackgroundColor="@color/panel_0"
                     app:cardCornerRadius="20dp"
                     app:cardElevation="0dp"
@@ -894,6 +1082,7 @@
                 </com.google.android.material.card.MaterialCardView>
 
                 <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/capabilitySettingsCard"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
@@ -913,26 +1102,157 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:fontFamily="sans-serif-medium"
-                            android:text="@string/settings_one_off_title"
+                            android:text="@string/settings_voice_title"
+                            android:textColor="@color/ink_900"
+                            android:textSize="12sp" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:orientation="horizontal">
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="@string/settings_voice_mode_label"
+                                    android:textColor="@color/slate_500"
+                                    android:textSize="11sp" />
+
+                                <TextView
+                                    android:id="@+id/voiceRecognitionModeValueText"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="4dp"
+                                    android:clickable="true"
+                                    android:focusable="true"
+                                    android:textColor="@color/ink_900"
+                                    android:textSize="12sp" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="10dp"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="@string/settings_voice_cloud_region_label"
+                                    android:textColor="@color/slate_500"
+                                    android:textSize="11sp" />
+
+                                <TextView
+                                    android:id="@+id/voiceCloudRegionValueText"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="4dp"
+                                    android:clickable="true"
+                                    android:focusable="true"
+                                    android:textColor="@color/ink_900"
+                                    android:textSize="12sp" />
+                            </LinearLayout>
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:orientation="horizontal">
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="@string/settings_voice_cn_provider_label"
+                                    android:textColor="@color/slate_500"
+                                    android:textSize="11sp" />
+
+                                <TextView
+                                    android:id="@+id/voiceCloudCnProviderValueText"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="4dp"
+                                    android:clickable="true"
+                                    android:focusable="true"
+                                    android:textColor="@color/ink_900"
+                                    android:textSize="12sp" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="10dp"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="@string/settings_voice_global_provider_label"
+                                    android:textColor="@color/slate_500"
+                                    android:textSize="11sp" />
+
+                                <TextView
+                                    android:id="@+id/voiceCloudGlobalProviderValueText"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="4dp"
+                                    android:clickable="true"
+                                    android:focusable="true"
+                                    android:textColor="@color/ink_900"
+                                    android:textSize="12sp" />
+                            </LinearLayout>
+                        </LinearLayout>
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:text="@string/settings_voice_tts_voice_label"
+                            android:textColor="@color/slate_500"
+                            android:textSize="11sp" />
+
+                        <TextView
+                            android:id="@+id/voiceCloudTencentTtsVoiceValueText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:clickable="true"
+                            android:focusable="true"
                             android:textColor="@color/ink_900"
                             android:textSize="12sp" />
 
                         <TextView
-                            android:id="@+id/scanAppsValueText"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:text="@string/settings_voice_auto_speak_label"
+                            android:textColor="@color/slate_500"
+                            android:textSize="11sp" />
+
+                        <TextView
+                            android:id="@+id/voiceAutoSpeakValueText"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="8dp"
+                            android:layout_marginTop="4dp"
+                            android:clickable="true"
+                            android:focusable="true"
                             android:textColor="@color/ink_900"
                             android:textSize="12sp" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/runToolDiscoveryButton"
-                            style="@style/AppButton.Fixed"
-                            android:layout_width="match_parent"
-                            android:layout_height="44dp"
-                            android:layout_marginTop="6dp"
-                            android:text="@string/run_tool_discovery_scan"
-                            app:backgroundTint="@color/clay_500" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
@@ -1186,162 +1506,10 @@
                 </com.google.android.material.card.MaterialCardView>
 
                 <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/languageSettingsCard"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:layout_marginBottom="10dp"
-                    app:cardBackgroundColor="@color/panel_0"
-                    app:cardCornerRadius="20dp"
-                    app:cardElevation="0dp"
-                    app:strokeColor="@color/sand_100"
-                    app:strokeWidth="1dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="14dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:fontFamily="sans-serif-medium"
-                            android:text="@string/permission_controls_title"
-                            android:textColor="@color/ink_900"
-                            android:textSize="12sp" />
-
-                        <TextView
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
-                            android:text="@string/permission_controls_body"
-                            android:textColor="@color/slate_500"
-                            android:textSize="11sp" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/openAccessibilitySettingsButton"
-                            style="@style/AppButton.Fixed"
-                            android:layout_width="match_parent"
-                            android:layout_height="44dp"
-                            android:layout_marginTop="10dp"
-                            android:text="@string/open_accessibility_settings"
-                            app:backgroundTint="@color/clay_500" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="10dp"
-                            android:text="@string/settings_capture_compression_label"
-                            android:textColor="@color/slate_500"
-                            android:textSize="11sp" />
-
-                        <TextView
-                            android:id="@+id/captureCompressionValueText"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
-                            android:textColor="@color/ink_900"
-                            android:textSize="12sp" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/requestScreenCaptureButton"
-                            style="@style/AppButton.Fixed"
-                            android:layout_width="match_parent"
-                            android:layout_height="44dp"
-                            android:layout_marginTop="6dp"
-                            android:text="@string/request_capture_permission"
-                            app:backgroundTint="@color/slate_500" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/openUsageAccessSettingsButton"
-                            style="@style/AppButton.Fixed"
-                            android:layout_width="match_parent"
-                            android:layout_height="44dp"
-                            android:layout_marginTop="6dp"
-                            android:text="@string/open_usage_access_settings"
-                            app:backgroundTint="@color/moss_500" />
-
-                        <LinearLayout
-                            android:id="@+id/shizukuSettingsGroup"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="16dp"
-                            android:orientation="vertical"
-                            android:visibility="gone">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:fontFamily="sans-serif-medium"
-                                android:text="@string/settings_shizuku_title"
-                                android:textColor="@color/ink_900"
-                                android:textSize="12sp" />
-
-                            <TextView
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="4dp"
-                                android:text="@string/settings_shizuku_body"
-                                android:textColor="@color/slate_500"
-                                android:textSize="11sp" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="10dp"
-                                android:text="@string/settings_shizuku_status_label"
-                                android:textColor="@color/slate_500"
-                                android:textSize="11sp" />
-
-                            <TextView
-                                android:id="@+id/shizukuSettingsStatusText"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="4dp"
-                                android:textColor="@color/ink_900"
-                                android:textSize="12sp" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="10dp"
-                                android:text="@string/settings_shizuku_last_bootstrap_label"
-                                android:textColor="@color/slate_500"
-                                android:textSize="11sp" />
-
-                            <TextView
-                                android:id="@+id/shizukuLastBootstrapText"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="4dp"
-                                android:textColor="@color/ink_900"
-                                android:textSize="12sp" />
-
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/prepareWithShizukuButton"
-                                style="@style/AppButton.Fixed"
-                                android:layout_width="match_parent"
-                                android:layout_height="44dp"
-                                android:layout_marginTop="10dp"
-                                android:text="@string/prepare_with_shizuku"
-                                app:backgroundTint="@color/moss_500" />
-
-                            <com.google.android.material.switchmaterial.SwitchMaterial
-                                android:id="@+id/shizukuAutoPrepareSwitch"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="8dp"
-                                android:text="@string/settings_shizuku_auto_prepare"
-                                android:textColor="@color/ink_900"
-                                android:textSize="12sp" />
-                        </LinearLayout>
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="14dp"
                     app:cardBackgroundColor="@color/panel_0"
                     app:cardCornerRadius="20dp"
                     app:cardElevation="0dp"
@@ -1395,6 +1563,7 @@
                             app:backgroundTint="@color/moss_500" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
+
             </LinearLayout>
         </androidx.core.widget.NestedScrollView>
     </FrameLayout>
@@ -1424,43 +1593,89 @@
         android:background="@color/panel_0"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="10dp"
-        android:paddingTop="8dp"
-        android:paddingEnd="10dp"
+        android:paddingStart="12dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="12dp"
         android:paddingBottom="8dp">
 
-        <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/composerInputLayout"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:hint="@string/message_hint"
-            app:boxBackgroundColor="@color/panel_0"
-            app:boxBackgroundMode="filled"
-            app:boxCornerRadiusBottomEnd="24dp"
-            app:boxCornerRadiusBottomStart="24dp"
-            app:boxCornerRadiusTopEnd="24dp"
-            app:boxCornerRadiusTopStart="24dp"
-            app:boxStrokeColor="@color/sand_100">
+        <ImageButton
+            android:id="@+id/inputModeToggleButton"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:layout_marginEnd="8dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/voice_input"
+            android:padding="4dp"
+            android:src="@drawable/ic_wechat_mic"
+            app:tint="@color/ink_900" />
 
-            <com.google.android.material.textfield.TextInputEditText
+        <FrameLayout
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1">
+
+            <EditText
                 android:id="@+id/inputEditText"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:inputType="textMultiLine|textCapSentences"
-                android:maxLines="4"
-                android:minLines="1"
-                android:textSize="12sp" />
-        </com.google.android.material.textfield.TextInputLayout>
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_chat_input_field"
+                android:gravity="center_vertical"
+                android:hint="@string/message_hint"
+                android:imeOptions="actionSend"
+                android:inputType="textCapSentences"
+                android:maxLines="1"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:textColor="@color/ink_900"
+                android:textColorHint="@color/slate_500"
+                android:textSize="15sp" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/sendButton"
-            style="@style/AppButton.Fixed"
-            android:layout_width="wrap_content"
-            android:layout_height="44dp"
+            <TextView
+                android:id="@+id/holdToTalkButton"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_chat_hold_to_talk"
+                android:drawablePadding="6dp"
+                android:gravity="center"
+                android:text="@string/voice_hold_to_talk"
+                android:textColor="@color/ink_900"
+                android:textSize="15sp"
+                android:visibility="gone" />
+        </FrameLayout>
+
+        <ImageButton
+            android:id="@+id/captureImageButton"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:layout_marginStart="8dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/capture_image"
+            android:padding="4dp"
+            android:src="@drawable/ic_wechat_camera"
+            app:tint="@color/ink_900" />
+
+        <ImageButton
+            android:id="@+id/pickImageButton"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
             android:layout_marginStart="6dp"
-            android:text="@string/send"
-            app:backgroundTint="@color/clay_500" />
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/pick_image"
+            android:padding="4dp"
+            android:src="@drawable/ic_wechat_add_circle"
+            app:tint="@color/ink_900" />
+
+            <ImageButton
+                android:id="@+id/sendMessageButton"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_send_action_green"
+                android:contentDescription="@string/send"
+                android:padding="7dp"
+                android:src="@drawable/ic_wechat_send_filled"
+                android:visibility="gone"
+                app:tint="@color/white" />
     </LinearLayout>
 
     <LinearLayout

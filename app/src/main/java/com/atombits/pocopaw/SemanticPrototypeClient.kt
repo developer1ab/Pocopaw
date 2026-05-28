@@ -354,7 +354,42 @@ class SemanticPrototypeClient {
                     put(
                         JSONObject().apply {
                             put("role", message.role)
-                            put("content", message.content)
+                            val parts = message.contentParts
+                            if (parts.isNullOrEmpty()) {
+                                put("content", message.content)
+                            } else {
+                                put(
+                                    "content",
+                                    JSONArray().apply {
+                                        parts.forEach { part ->
+                                            when (part.type) {
+                                                "text" -> {
+                                                    put(
+                                                        JSONObject().apply {
+                                                            put("type", "text")
+                                                            put("text", part.text.orEmpty())
+                                                        }
+                                                    )
+                                                }
+
+                                                "image_url" -> {
+                                                    put(
+                                                        JSONObject().apply {
+                                                            put("type", "image_url")
+                                                            put(
+                                                                "image_url",
+                                                                JSONObject().apply {
+                                                                    put("url", part.imageDataUrl.orEmpty())
+                                                                }
+                                                            )
+                                                        }
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                )
+                            }
                         }
                     )
                 }
@@ -475,17 +510,48 @@ class SemanticPrototypeClient {
         promptMessages
             .filterNot { message -> message.role.equals("system", ignoreCase = true) }
             .forEach { message ->
+                val parts = JSONArray().apply {
+                    if (message.contentParts.isNullOrEmpty()) {
+                        put(
+                            JSONObject().apply {
+                                put("text", message.content)
+                            }
+                        )
+                    } else {
+                        message.contentParts.forEach { part ->
+                            when (part.type) {
+                                "text" -> {
+                                    put(
+                                        JSONObject().apply {
+                                            put("text", part.text.orEmpty())
+                                        }
+                                    )
+                                }
+
+                                "image_url" -> {
+                                    put(
+                                        JSONObject().apply {
+                                            put(
+                                                "inlineData",
+                                                JSONObject().apply {
+                                                    put("mimeType", "image/jpeg")
+                                                    val rawData = part.imageDataUrl
+                                                        ?.substringAfter("base64,", "")
+                                                        .orEmpty()
+                                                    put("data", rawData)
+                                                }
+                                            )
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
                 contents.put(
                     JSONObject().apply {
                         put("role", mapGeminiRole(message.role))
-                        put(
-                            "parts",
-                            JSONArray().put(
-                                JSONObject().apply {
-                                    put("text", message.content)
-                                }
-                            )
-                        )
+                        put("parts", parts)
                     }
                 )
             }
@@ -1062,8 +1128,20 @@ class SemanticPrototypeClient {
         } else {
             null
         }
+        val rawAssistantReply = payload.optString("assistant_reply").ifBlank {
+            if (AppLocaleManager.isEnglishLocale()) {
+                "I'll keep organizing this request for you."
+            } else {
+                "我先继续帮你整理这个需求。"
+            }
+        }
+        val rawSearchSummary = payload.optString("search_summary").trim().takeIf { value -> value.isNotBlank() }
+        val guardedLanguage = enforceConfiguredOutputLanguage(
+            assistantReply = rawAssistantReply,
+            searchSummaryContent = rawSearchSummary
+        )
         return SemanticTurnResponse(
-            assistantReply = payload.optString("assistant_reply").ifBlank { "我先继续帮你整理这个需求。" },
+            assistantReply = guardedLanguage.assistantReply,
             stage = stage,
             currentPhase = passiveTurnControl.currentPhase,
             userRequestSemantic = passiveTurnControl.userRequestSemantic,
@@ -1078,10 +1156,114 @@ class SemanticPrototypeClient {
             semanticIntentState = semanticIntentState,
             taskDraft = taskDraft,
             semanticSummary = payload.optString("semantic_summary"),
-            searchSummaryContent = payload.optString("search_summary").trim().takeIf { value -> value.isNotBlank() },
+            searchSummaryContent = guardedLanguage.searchSummaryContent,
             tokenUsage = tokenUsage,
             reasoningContent = reasoningContent
         ).attachExecutionBoundaryPacket(executionBoundaryPacket)
+    }
+
+    private data class LanguageGuardedText(
+        val assistantReply: String,
+        val searchSummaryContent: String?
+    )
+
+    private fun enforceConfiguredOutputLanguage(
+        assistantReply: String,
+        searchSummaryContent: String?
+    ): LanguageGuardedText {
+        if (!AppLocaleManager.isEnglishLocale()) {
+            return LanguageGuardedText(
+                assistantReply = assistantReply,
+                searchSummaryContent = searchSummaryContent
+            )
+        }
+        val needsRewrite = containsLikelyChinese(assistantReply) ||
+            (searchSummaryContent?.let(::containsLikelyChinese) == true)
+        if (!needsRewrite) {
+            return LanguageGuardedText(
+                assistantReply = assistantReply,
+                searchSummaryContent = searchSummaryContent
+            )
+        }
+        return rewriteVisibleTextToEnglish(
+            assistantReply = assistantReply,
+            searchSummaryContent = searchSummaryContent
+        ) ?: LanguageGuardedText(
+            assistantReply = assistantReply,
+            searchSummaryContent = searchSummaryContent
+        )
+    }
+
+    private fun rewriteVisibleTextToEnglish(
+        assistantReply: String,
+        searchSummaryContent: String?
+    ): LanguageGuardedText? {
+        return runCatching {
+            val rewriteMessages = listOf(
+                PromptMessage(
+                    role = "system",
+                    content = "Rewrite user-visible fields into natural English while preserving facts, numbers, dates, locations, entities, uncertainty, and tone. Do not add new facts. Return strict JSON with keys assistant_reply and search_summary."
+                ),
+                PromptMessage(
+                    role = "user",
+                    content = buildString {
+                        appendLine("Input JSON:")
+                        append(
+                            JSONObject().apply {
+                                put("assistant_reply", assistantReply)
+                                put("search_summary", searchSummaryContent ?: JSONObject.NULL)
+                            }.toString()
+                        )
+                    }
+                )
+            )
+            val rewrittenRaw = requestPromptMessages(
+                promptMessages = rewriteMessages,
+                requestConfig = PromptRequestConfig(
+                    temperature = 0.0,
+                    topP = 0.2,
+                    maxTokens = 600,
+                    requestTag = "language_guard_en_rewrite"
+                )
+            )
+            val outer = JSONObject(rewrittenRaw)
+            val content = outer
+                .optJSONArray("choices")
+                ?.optJSONObject(0)
+                ?.optJSONObject("message")
+                ?.optString("content")
+                ?.trim()
+                .orEmpty()
+            if (content.isBlank()) {
+                return@runCatching null
+            }
+            val payloadText = extractFirstJsonObject(sanitizeModelContent(content)) ?: sanitizeModelContent(content)
+            val payload = JSONObject(payloadText)
+            val rewrittenAssistantReply = payload.optString("assistant_reply").trim().ifBlank { assistantReply }
+            val rewrittenSearchSummary = payload.optString("search_summary").trim().takeIf { it.isNotBlank() }
+            LanguageGuardedText(
+                assistantReply = rewrittenAssistantReply,
+                searchSummaryContent = rewrittenSearchSummary ?: searchSummaryContent
+            )
+        }.getOrNull()
+    }
+
+    private fun containsLikelyChinese(text: String): Boolean {
+        var cjkCount = 0
+        var letterOrDigitCount = 0
+        for (ch in text) {
+            if (isCjkCharacter(ch)) {
+                cjkCount++
+            }
+            if (ch.isLetterOrDigit()) {
+                letterOrDigitCount++
+            }
+        }
+        return cjkCount >= 8 || (cjkCount >= 3 && cjkCount * 2 >= letterOrDigitCount)
+    }
+
+    private fun isCjkCharacter(ch: Char): Boolean {
+        return ch in '\u4E00'..'\u9FFF' || ch in '\u3400'..'\u4DBF'
     }
 
     private fun buildRecoveryExecutionBrief(

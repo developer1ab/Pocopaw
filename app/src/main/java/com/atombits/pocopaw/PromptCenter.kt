@@ -342,7 +342,14 @@ enum class PromptPacketType {
 
 data class PromptMessage(
     val role: String,
-    val content: String
+    val content: String,
+    val contentParts: List<PromptContentPart>? = null
+)
+
+data class PromptContentPart(
+    val type: String,
+    val text: String? = null,
+    val imageDataUrl: String? = null
 )
 
 data class PromptTokenBudget(
@@ -1239,7 +1246,7 @@ object PromptCenter {
     internal fun buildSemanticIntentSystemContract(searchEnhanced: Boolean = false): String = """
                 pocopaw semantic intent contract for passive execution control.
                 The vision model handles screenshots and visual grounding, not this response.
-                Return one Chinese assistant reply plus structured passive JSON with one unified task_draft.
+                Return one assistant reply in the configured app language (English when app language is English; Simplified Chinese when app language is Simplified Chinese) plus structured passive JSON with one unified task_draft.
 
                 Rules:
                 - ${buildAssistantIdentityInstruction()}
@@ -1292,7 +1299,7 @@ object PromptCenter {
                 - when the user clearly names a service or app family, preserve that signal in task_draft.capability_id when grounded, otherwise use detail_slots.platform.
                 - for ride-hailing intents, keep the route app-oriented; do not reduce 打车/叫车 requests to generic geo navigation.
                 - when the user asks to continue or resume a prior task, keep the task on the same grounded context instead of silently inventing a brand new task.
-${if (searchEnhanced) "                - For search-enhanced turns, populate search_summary first, then assistant_reply; both must be user-visible Chinese strings.\n                - search_summary must summarize only topic-relevant external evidence.\n                - Do not add a separate visible reasoning summary inside the structured JSON; rely on the provider reasoning channel for detailed reasoning." else ""}
+${if (searchEnhanced) "                - For search-enhanced turns, populate search_summary first, then assistant_reply; both must be user-visible strings in the configured app language (English when app language is English; Simplified Chinese when app language is Simplified Chinese).\n                - Search evidence language never overrides output language. If evidence is in another language, translate it into the configured app language before writing search_summary and assistant_reply.\n                - search_summary must summarize only topic-relevant external evidence.\n                - Do not add a separate visible reasoning summary inside the structured JSON; rely on the provider reasoning channel for detailed reasoning." else ""}
     """.trimIndent()
 
     internal fun buildSearchPlanUserPrompt(
