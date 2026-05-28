@@ -2380,7 +2380,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun maybeRunStartupShizukuBootstrap() {
-        if (!BuildConfig.DEBUG || startupShizukuBootstrapAttempted || !shizukuBootstrapManager.isAutoBootstrapEnabled()) {
+        if (startupShizukuBootstrapAttempted || !shizukuBootstrapManager.isAutoBootstrapEnabled()) {
             return
         }
         startupShizukuBootstrapAttempted = true
@@ -2399,7 +2399,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun maybeRetryStartupShizukuBootstrapAfterBinder() {
-        if (!pendingStartupBinderRetry || !BuildConfig.DEBUG || !shizukuBootstrapManager.isAutoBootstrapEnabled()) {
+        if (!pendingStartupBinderRetry || !shizukuBootstrapManager.isAutoBootstrapEnabled()) {
             return
         }
         pendingStartupBinderRetry = false
@@ -2463,17 +2463,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun buildShizukuSurfaceState(): ShizukuSurfaceState {
-        val visible = BuildConfig.DEBUG
-        if (!visible) {
-            return ShizukuSurfaceState(
-                visible = false,
-                topStatusText = "",
-                settingsStatusText = "",
-                lastBootstrapText = "",
-                autoPrepareEnabled = false,
-                autoPrepareSwitchEnabled = false
-            )
-        }
         val snapshot = shizukuBootstrapManager.currentStatusSnapshot()
         val lastStatusCode = shizukuBootstrapManager.readLastBootstrapStatusCode()
         val lastAttemptAt = shizukuBootstrapManager.readLastBootstrapAttemptAt()
