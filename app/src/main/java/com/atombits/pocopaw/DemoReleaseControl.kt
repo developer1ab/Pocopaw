@@ -54,24 +54,40 @@ internal object DemoReleaseControl {
 
     @Synchronized
     fun ensureBackendAccessAllowed() {
-        // Unlocked: backend access is always allowed.
+        if (prefs == null) {
+            return
+        }
+        if (readUsedTokens() >= DEMO_TOKEN_LIMIT) {
+            throw DemoQuotaExceededException()
+        }
     }
 
     @Synchronized
     fun consumeFromTokenUsage(tokenUsage: TokenUsage?, fallbackTokens: Int = 0) {
-        // Unlocked: quota accounting is disabled.
+        if (prefs == null) {
+            return
+        }
+        val consumedTokens = tokenUsage?.totalTokens?.coerceAtLeast(0)
+            ?: fallbackTokens.coerceAtLeast(0)
+        if (consumedTokens <= 0) {
+            return
+        }
+        val current = readUsedTokens()
+        val updated = (current + consumedTokens).coerceAtMost(DEMO_TOKEN_LIMIT)
+        writeUsedTokens(updated)
     }
 
     fun tokenLimit(): Int = DEMO_TOKEN_LIMIT
 
     @Synchronized
     fun readUsedTokens(): Int {
-        return 0
+        val activePrefs = prefs ?: return 0
+        return activePrefs.getInt(KEY_DEMO_USED_TOKENS, 0).coerceAtLeast(0)
     }
 
     @Synchronized
     fun readRemainingTokens(): Int {
-        return DEMO_TOKEN_LIMIT
+        return (DEMO_TOKEN_LIMIT - readUsedTokens()).coerceAtLeast(0)
     }
 
     @Synchronized
@@ -128,6 +144,10 @@ internal object DemoReleaseControl {
     @Synchronized
     fun markScreenCaptureOnboardingCompleted() {
         prefsOrThrow().edit().putBoolean(KEY_DEMO_ONBOARDING_SCREEN_CAPTURE_COMPLETED, true).apply()
+    }
+
+    private fun writeUsedTokens(value: Int) {
+        prefs?.edit()?.putInt(KEY_DEMO_USED_TOKENS, value)?.apply()
     }
 
     private fun prefsOrThrow(): SharedPreferences {

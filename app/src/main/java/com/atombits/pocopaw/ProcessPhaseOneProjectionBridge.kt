@@ -7,7 +7,7 @@ import com.atombits.pocopaw.process.runtime.ProcessRuntimeState
 import com.atombits.pocopaw.process.runtime.ProcessRuntimeStatus
 import java.util.UUID
 
-private const val defaultProcessRuntimeMaxSteps = 25
+private const val defaultProcessRuntimeMaxSteps = 100
 
 internal fun projectProcessRuntimeState(
     executionRuntime: ExecutionRuntimeState?,

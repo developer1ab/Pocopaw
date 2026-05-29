@@ -18,6 +18,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.speech.RecognizerIntent
+import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import android.speech.tts.TextToSpeech
 import android.text.InputType
@@ -95,12 +96,21 @@ class MainActivity : AppCompatActivity() {
         private const val VOICE_DEBUG_TAG = "VoiceInputDebug"
         private const val REQUEST_CODE_SHIZUKU_PERMISSION = 7001
         private const val LOADING_ANIMATION_INTERVAL_MS = 450L
+        private const val HOLD_TO_TALK_ANIMATION_INTERVAL_MS = 140L
         private const val STATE_SURFACE = "state_surface"
         private const val STATE_CONSOLE_CHANNEL = "state_console_channel"
         private const val TENCENT_TTS_VOICE_BOY = 101015
         private const val TENCENT_TTS_VOICE_GIRL = 101016
         private const val TENCENT_TTS_VOICE_CHAT_CHILD = 502007
         private const val TENCENT_TTS_VOICE_SOFT_BOY = 603002
+        private val HOLD_TO_TALK_RECORDING_FRAMES = arrayOf(
+            "<<<>>>",
+            "<<<<>>>>",
+            "<<<<<>>>>>",
+            "<<<<<<>>>>>>",
+            "<<<<<>>>>>",
+            "<<<<>>>>"
+        )
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -188,14 +198,20 @@ class MainActivity : AppCompatActivity() {
     private var cloudTtsPlayer: MediaPlayer? = null
     private var cloudTtsTempFile: File? = null
     private var cloudTtsJob: Job? = null
+    private var activeSpeechMessageId: String? = null
+    private var activeSpeechUtteranceId: String? = null
     private val asrRoutingClient = AsrRoutingClient()
     private var isVoiceRecording = false
     private var composerPressToTalkMode = false
     private var lastAutoSpokenMessageId: String? = null
+    private var pendingAutoExecutionStore: PrototypeStoreData? = null
+    private var pendingAutoExecutionUtteranceId: String? = null
+    private var pendingAutoExecutionCloudMessageId: String? = null
     private var audioRecord: AudioRecord? = null
     private var voiceRecordJob: Job? = null
     private var recordedPcmBuffer: ByteArrayOutputStream? = null
     private var voiceRecordingStartedAtMs: Long = 0L
+    private var holdToTalkAnimationFrame = 0
 
     private val speechInputLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -231,6 +247,18 @@ class MainActivity : AppCompatActivity() {
             binding.loadingText.text = frames[loadingAnimationFrame]
             loadingAnimationFrame = (loadingAnimationFrame + 1) % frames.size
             binding.loadingText.postDelayed(this, LOADING_ANIMATION_INTERVAL_MS)
+        }
+    }
+    private val holdToTalkAnimationRunnable = object : Runnable {
+        override fun run() {
+            if (!::binding.isInitialized || !isVoiceRecording) {
+                return
+            }
+            binding.holdToTalkButton.text = HOLD_TO_TALK_RECORDING_FRAMES[
+                holdToTalkAnimationFrame % HOLD_TO_TALK_RECORDING_FRAMES.size
+            ]
+            holdToTalkAnimationFrame = (holdToTalkAnimationFrame + 1) % HOLD_TO_TALK_RECORDING_FRAMES.size
+            binding.holdToTalkButton.postDelayed(this, HOLD_TO_TALK_ANIMATION_INTERVAL_MS)
         }
     }
     private val lastUpdatedFormatter: DateFormat = DateFormat.getDateTimeInstance(
@@ -375,6 +403,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         UiStrings.initialize(this)
         DemoReleaseControl.initialize(applicationContext)
+        binding.toolbarVersionText.text = getString(R.string.toolbar_version_badge, BuildConfig.VERSION_NAME)
         if (savedInstanceState != null) {
             currentSurface = savedInstanceState.getString(STATE_SURFACE)
                 ?.let(MainSurface::valueOf)
@@ -479,7 +508,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        clearPendingAutoExecutionAfterSpeech()
         stopVoiceRecordingSession(cancelOnly = true)
+        stopSpeechPlayback(cancelPendingAutoExecution = true)
         runCatching {
             Shizuku.removeBinderReceivedListener(shizukuBinderReceivedListener)
             Shizuku.removeBinderDeadListener(shizukuBinderDeadListener)
@@ -489,14 +520,6 @@ class MainActivity : AppCompatActivity() {
         textToSpeech?.shutdown()
         textToSpeech = null
         ttsReady = false
-        cloudTtsJob?.cancel()
-        cloudTtsJob = null
-        cloudTtsPlayer?.stop()
-        cloudTtsPlayer?.reset()
-        cloudTtsPlayer?.release()
-        cloudTtsPlayer = null
-        cloudTtsTempFile?.delete()
-        cloudTtsTempFile = null
         RuntimeServiceStatusNotifier.removeListener(runtimeServiceStatusListener)
         clearDemoHighlightAnimation()
         stopLoadingAnimation()
@@ -551,7 +574,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-        setComposerPressToTalkMode(false)
+        setComposerPressToTalkMode(true)
         binding.sendMessageButton.setOnClickListener { submitMessage() }
         binding.pickImageButton.setOnClickListener { imagePickerLauncher.launch("image/*") }
         binding.captureImageButton.setOnClickListener { cameraPreviewLauncher.launch(null) }
@@ -596,14 +619,74 @@ class MainActivity : AppCompatActivity() {
         if (isRecording) {
             binding.holdToTalkButton.setBackgroundResource(R.drawable.bg_chat_hold_to_talk_active)
             binding.holdToTalkButton.setTextColor(ContextCompat.getColor(this, R.color.white))
-            binding.holdToTalkButton.text = "............"
+            startHoldToTalkRecordingAnimation()
             binding.holdToTalkButton.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, 0, 0)
         } else {
+            stopHoldToTalkRecordingAnimation()
             binding.holdToTalkButton.setBackgroundResource(R.drawable.bg_chat_hold_to_talk)
             binding.holdToTalkButton.setTextColor(ContextCompat.getColor(this, R.color.ink_900))
             binding.holdToTalkButton.text = getString(R.string.voice_hold_to_talk)
             binding.holdToTalkButton.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, 0, 0)
         }
+    }
+
+    private fun startHoldToTalkRecordingAnimation() {
+        binding.holdToTalkButton.removeCallbacks(holdToTalkAnimationRunnable)
+        holdToTalkAnimationFrame = 0
+        binding.holdToTalkButton.text = HOLD_TO_TALK_RECORDING_FRAMES.first()
+        holdToTalkAnimationFrame = 1
+        binding.holdToTalkButton.postDelayed(holdToTalkAnimationRunnable, HOLD_TO_TALK_ANIMATION_INTERVAL_MS)
+    }
+
+    private fun stopHoldToTalkRecordingAnimation() {
+        if (!::binding.isInitialized) {
+            return
+        }
+        binding.holdToTalkButton.removeCallbacks(holdToTalkAnimationRunnable)
+        holdToTalkAnimationFrame = 0
+    }
+
+    private fun updateSpeakingMessage(messageId: String?) {
+        if (activeSpeechMessageId == messageId) {
+            return
+        }
+        activeSpeechMessageId = messageId
+        if (::chatAdapter.isInitialized) {
+            chatAdapter.setSpeakingMessageId(messageId)
+        }
+    }
+
+    private fun clearActiveSpeechPlayback() {
+        activeSpeechUtteranceId = null
+        updateSpeakingMessage(null)
+    }
+
+    private fun releaseCloudTtsPlayback(player: MediaPlayer? = cloudTtsPlayer) {
+        player?.let { mediaPlayer ->
+            runCatching { mediaPlayer.stop() }
+            runCatching { mediaPlayer.reset() }
+            runCatching { mediaPlayer.release() }
+        }
+        if (player == null || cloudTtsPlayer === player) {
+            cloudTtsPlayer = null
+        }
+        cloudTtsTempFile?.delete()
+        cloudTtsTempFile = null
+    }
+
+    private fun stopSpeechPlayback(cancelPendingAutoExecution: Boolean) {
+        val pendingStoreToStart = if (cancelPendingAutoExecution) {
+            null
+        } else {
+            pendingAutoExecutionStore
+        }
+        clearPendingAutoExecutionAfterSpeech()
+        clearActiveSpeechPlayback()
+        cloudTtsJob?.cancel()
+        cloudTtsJob = null
+        textToSpeech?.stop()
+        releaseCloudTtsPlayback()
+        pendingStoreToStart?.let(::startAutoExecutionAfterSpeech)
     }
 
     private fun bindSurfaceActions() {
@@ -778,6 +861,7 @@ class MainActivity : AppCompatActivity() {
         if (userInput.isBlank()) {
             return
         }
+        clearPendingAutoExecutionAfterSpeech()
         currentSurface = MainSurface.CONSOLE
         currentConsoleChannel = ConsoleChannel.CONVERSATION
         val submittedInput = userInput
@@ -808,22 +892,19 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 is ChatTurnSubmitResult.ConversationCompleted -> {
-                    if (result.executionMessage != null) {
-                        currentConsoleChannel = ConsoleChannel.EXECUTION
-                    }
                     pendingConversationMessages = emptyList()
                     storeData = result.updatedStore
                     render(storeData)
-                    maybeAutoSpeakLatestAssistantMessage(result.updatedStore)
-                    result.executionMessage?.let { message ->
-                        Snackbar.make(binding.root, message, Snackbar.LENGTH_SHORT).show()
+                    val waitingForSpeech = maybeAutoSpeakLatestAssistantMessage(
+                        store = result.updatedStore,
+                        deferExecutionStart = result.shouldAutoStartExecution
+                    )
+                    if (result.shouldAutoStartExecution && !waitingForSpeech) {
+                        performConversationAutoExecution(result.updatedStore)
                     }
                 }
 
                 is ChatTurnSubmitResult.Failure -> {
-                    if (result.attemptedExecutionStart) {
-                        currentConsoleChannel = ConsoleChannel.EXECUTION
-                    }
                     binding.inputEditText.setText(result.restoreInput)
                     pendingConversationMessages = result.pendingMessages
                     render(storeData)
@@ -871,6 +952,7 @@ class MainActivity : AppCompatActivity() {
             Snackbar.make(binding.root, getString(R.string.voice_input_not_supported), Snackbar.LENGTH_SHORT).show()
             return
         }
+        stopSpeechPlayback(cancelPendingAutoExecution = true)
         recordedPcmBuffer = ByteArrayOutputStream()
         audioRecord = recorder
         isVoiceRecording = true
@@ -1042,6 +1124,7 @@ class MainActivity : AppCompatActivity() {
             Snackbar.make(binding.root, getString(R.string.voice_input_not_supported), Snackbar.LENGTH_SHORT).show()
             return
         }
+        stopSpeechPlayback(cancelPendingAutoExecution = true)
         speechInputLauncher.launch(intent)
     }
 
@@ -1193,19 +1276,29 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun maybeAutoSpeakLatestAssistantMessage(store: PrototypeStoreData) {
+    private fun maybeAutoSpeakLatestAssistantMessage(
+        store: PrototypeStoreData,
+        deferExecutionStart: Boolean = false
+    ): Boolean {
         val settings = voiceRecognitionSettingsStore.read()
         if (!settings.autoSpeakEnabled) {
-            return
+            return false
         }
         val latestAssistantMessage = store.messages.lastOrNull { message ->
             message.role == MessageRole.ASSISTANT && message.content.isNotBlank()
-        } ?: return
+        } ?: return false
         if (latestAssistantMessage.id == lastAutoSpokenMessageId) {
-            return
+            return false
         }
-        lastAutoSpokenMessageId = latestAssistantMessage.id
-        speakMessage(latestAssistantMessage)
+        val started = speakMessage(
+            message = latestAssistantMessage,
+            deferredExecutionStore = if (deferExecutionStart) store else null,
+            toggleIfAlreadySpeaking = false
+        )
+        if (started) {
+            lastAutoSpokenMessageId = latestAssistantMessage.id
+        }
+        return started
     }
 
     private fun handleSelectedImage(uri: Uri, fromCamera: Boolean) {
@@ -1322,31 +1415,84 @@ class MainActivity : AppCompatActivity() {
             }
             val tts = textToSpeech ?: return@TextToSpeech
             val languageResult = tts.setLanguage(Locale.getDefault())
+            tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) = Unit
+
+                override fun onDone(utteranceId: String?) {
+                    runOnUiThread {
+                        handleLocalSpeechPlaybackFinished(utteranceId)
+                    }
+                }
+
+                @Suppress("OVERRIDE_DEPRECATION")
+                override fun onError(utteranceId: String?) {
+                    runOnUiThread {
+                        handleLocalSpeechPlaybackFinished(utteranceId)
+                    }
+                }
+
+                override fun onError(utteranceId: String?, errorCode: Int) {
+                    runOnUiThread {
+                        handleLocalSpeechPlaybackFinished(utteranceId)
+                    }
+                }
+
+                override fun onStop(utteranceId: String?, interrupted: Boolean) {
+                    runOnUiThread {
+                        handleLocalSpeechPlaybackFinished(utteranceId)
+                    }
+                }
+            })
             ttsReady = languageResult != TextToSpeech.LANG_MISSING_DATA && languageResult != TextToSpeech.LANG_NOT_SUPPORTED
         }
     }
 
-    private fun speakMessage(message: ChatMessage) {
+    private fun speakMessage(
+        message: ChatMessage,
+        deferredExecutionStore: PrototypeStoreData? = null,
+        toggleIfAlreadySpeaking: Boolean = true
+    ): Boolean {
         val text = message.content.trim()
         if (text.isBlank()) {
             Snackbar.make(binding.root, getString(R.string.message_action_speak_empty), Snackbar.LENGTH_SHORT).show()
-            return
+            return false
         }
+        if (toggleIfAlreadySpeaking && activeSpeechMessageId == message.id) {
+            stopSpeechPlayback(cancelPendingAutoExecution = false)
+            return false
+        }
+        stopSpeechPlayback(cancelPendingAutoExecution = true)
         val settings = voiceRecognitionSettingsStore.read()
         if (settings.mode == VoiceRecognitionMode.CLOUD) {
-            speakMessageWithCloudTts(text, settings)
-            return
+            return speakMessageWithCloudTts(text, settings, message.id, deferredExecutionStore)
         }
         val tts = textToSpeech
         if (!ttsReady || tts == null) {
             Snackbar.make(binding.root, getString(R.string.message_action_tts_unavailable), Snackbar.LENGTH_SHORT).show()
-            return
+            return false
         }
-        tts.stop()
-        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "message_${message.id}")
+        val utteranceId = buildMessageUtteranceId(message.id)
+        if (deferredExecutionStore != null) {
+            pendingAutoExecutionStore = deferredExecutionStore
+            pendingAutoExecutionUtteranceId = utteranceId
+        }
+        activeSpeechUtteranceId = utteranceId
+        updateSpeakingMessage(message.id)
+        val status = tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
+        if (status != TextToSpeech.SUCCESS) {
+            clearPendingAutoExecutionAfterSpeech()
+            clearActiveSpeechPlayback()
+            return false
+        }
+        return true
     }
 
-    private fun speakMessageWithCloudTts(text: String, settings: VoiceRecognitionSettings) {
+    private fun speakMessageWithCloudTts(
+        text: String,
+        settings: VoiceRecognitionSettings,
+        messageId: String,
+        deferredExecutionStore: PrototypeStoreData? = null
+    ): Boolean {
         val providerLabel = resolveCloudProviderLabel(settings)
         when (settings.cloudRegion) {
             VoiceCloudRegion.CN -> {
@@ -1358,10 +1504,14 @@ class MainActivity : AppCompatActivity() {
                                 getString(R.string.message_action_tts_cloud_not_configured, providerLabel),
                                 Snackbar.LENGTH_SHORT
                             ).show()
-                            return
+                            return false
                         }
-                        textToSpeech?.stop()
-                        cloudTtsJob?.cancel()
+                        if (deferredExecutionStore != null) {
+                            pendingAutoExecutionStore = deferredExecutionStore
+                            pendingAutoExecutionCloudMessageId = messageId
+                        }
+                        activeSpeechUtteranceId = null
+                        updateSpeakingMessage(messageId)
                         cloudTtsJob = lifecycleScope.launch {
                             runCatching {
                                 withContext(Dispatchers.IO) {
@@ -1371,18 +1521,29 @@ class MainActivity : AppCompatActivity() {
                                     )
                                 }
                             }.onSuccess { audioBytes ->
-                                playCloudTtsAudio(audioBytes)
+                                playCloudTtsAudio(audioBytes, messageId)
                             }.onFailure { error ->
+                                if (error is kotlinx.coroutines.CancellationException) {
+                                    if (activeSpeechMessageId == messageId) {
+                                        clearActiveSpeechPlayback()
+                                    }
+                                    return@launch
+                                }
                                 Log.e(VOICE_DEBUG_TAG, "Cloud TTS failed", error)
                                 val reason = error.message?.takeIf { it.isNotBlank() }
                                     ?: getString(R.string.request_failed_generic)
+                                if (activeSpeechMessageId == messageId) {
+                                    clearActiveSpeechPlayback()
+                                }
                                 Snackbar.make(
                                     binding.root,
                                     getString(R.string.message_action_tts_cloud_failed, reason),
                                     Snackbar.LENGTH_SHORT
                                 ).show()
+                                maybeStartPendingAutoExecutionForCloudMessage(messageId)
                             }
                         }
+                        return true
                     }
 
                     VoiceCnProvider.ALI -> {
@@ -1391,6 +1552,7 @@ class MainActivity : AppCompatActivity() {
                             getString(R.string.message_action_tts_cloud_not_ready, providerLabel),
                             Snackbar.LENGTH_SHORT
                         ).show()
+                        return false
                     }
                 }
             }
@@ -1401,6 +1563,7 @@ class MainActivity : AppCompatActivity() {
                     getString(R.string.message_action_tts_cloud_not_ready, providerLabel),
                     Snackbar.LENGTH_SHORT
                 ).show()
+                return false
             }
         }
     }
@@ -1419,14 +1582,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun playCloudTtsAudio(audioBytes: ByteArray) {
+    private fun playCloudTtsAudio(audioBytes: ByteArray, messageId: String) {
         runCatching {
-            cloudTtsPlayer?.stop()
-            cloudTtsPlayer?.reset()
-            cloudTtsPlayer?.release()
-            cloudTtsPlayer = null
-
-            cloudTtsTempFile?.delete()
+            releaseCloudTtsPlayback()
             val file = File(cacheDir, "tts_${System.currentTimeMillis()}.mp3")
             FileOutputStream(file).use { output ->
                 output.write(audioBytes)
@@ -1436,22 +1594,12 @@ class MainActivity : AppCompatActivity() {
             val player = MediaPlayer().apply {
                 setDataSource(file.absolutePath)
                 setOnCompletionListener { mp ->
-                    mp.reset()
-                    mp.release()
-                    if (cloudTtsPlayer === mp) {
-                        cloudTtsPlayer = null
-                    }
-                    cloudTtsTempFile?.delete()
-                    cloudTtsTempFile = null
+                    releaseCloudTtsPlayback(mp)
+                    handleCloudSpeechPlaybackFinished(messageId)
                 }
                 setOnErrorListener { mp, _, _ ->
-                    mp.reset()
-                    mp.release()
-                    if (cloudTtsPlayer === mp) {
-                        cloudTtsPlayer = null
-                    }
-                    cloudTtsTempFile?.delete()
-                    cloudTtsTempFile = null
+                    releaseCloudTtsPlayback(mp)
+                    handleCloudSpeechPlaybackFinished(messageId)
                     false
                 }
                 prepare()
@@ -1462,11 +1610,86 @@ class MainActivity : AppCompatActivity() {
             Log.e(VOICE_DEBUG_TAG, "Play cloud TTS audio failed", error)
             val reason = error.message?.takeIf { it.isNotBlank() }
                 ?: getString(R.string.request_failed_generic)
+            if (activeSpeechMessageId == messageId) {
+                clearActiveSpeechPlayback()
+            }
             Snackbar.make(
                 binding.root,
                 getString(R.string.message_action_tts_cloud_failed, reason),
                 Snackbar.LENGTH_SHORT
             ).show()
+            maybeStartPendingAutoExecutionForCloudMessage(messageId)
+        }
+    }
+
+    private fun buildMessageUtteranceId(messageId: String): String {
+        return "message_$messageId"
+    }
+
+    private fun clearPendingAutoExecutionAfterSpeech() {
+        pendingAutoExecutionStore = null
+        pendingAutoExecutionUtteranceId = null
+        pendingAutoExecutionCloudMessageId = null
+    }
+
+    private fun handleLocalSpeechPlaybackFinished(utteranceId: String?) {
+        if (utteranceId != null && activeSpeechUtteranceId == utteranceId) {
+            clearActiveSpeechPlayback()
+        }
+        maybeStartPendingAutoExecutionForUtterance(utteranceId)
+    }
+
+    private fun handleCloudSpeechPlaybackFinished(messageId: String) {
+        if (activeSpeechMessageId == messageId) {
+            clearActiveSpeechPlayback()
+        }
+        maybeStartPendingAutoExecutionForCloudMessage(messageId)
+    }
+
+    private fun maybeStartPendingAutoExecutionForUtterance(utteranceId: String?) {
+        val expectedUtteranceId = pendingAutoExecutionUtteranceId ?: return
+        if (expectedUtteranceId != utteranceId) {
+            return
+        }
+        runOnUiThread {
+            startPendingAutoExecutionAfterSpeech()
+        }
+    }
+
+    private fun maybeStartPendingAutoExecutionForCloudMessage(messageId: String) {
+        val expectedMessageId = pendingAutoExecutionCloudMessageId ?: return
+        if (expectedMessageId != messageId) {
+            return
+        }
+        runOnUiThread {
+            startPendingAutoExecutionAfterSpeech()
+        }
+    }
+
+    private fun startPendingAutoExecutionAfterSpeech() {
+        val pendingStore = pendingAutoExecutionStore ?: return
+        clearPendingAutoExecutionAfterSpeech()
+        startAutoExecutionAfterSpeech(pendingStore)
+    }
+
+    private fun startAutoExecutionAfterSpeech(store: PrototypeStoreData) {
+        setLoading(true)
+        lifecycleScope.launch {
+            performConversationAutoExecution(store)
+            setLoading(false)
+        }
+    }
+
+    private suspend fun performConversationAutoExecution(store: PrototypeStoreData) {
+        runCatching {
+            executionEntryOrchestrator.autoStartExecution(store)
+        }.onSuccess { executionOutcome ->
+            storeData = executionOutcome.updatedStore
+            render(storeData)
+            Snackbar.make(binding.root, executionOutcome.message, Snackbar.LENGTH_SHORT).show()
+        }.onFailure { throwable ->
+            render(storeData)
+            Snackbar.make(binding.root, buildFailureMessage(throwable), Snackbar.LENGTH_LONG).show()
         }
     }
 
@@ -1541,8 +1764,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startExecution() {
-        currentSurface = MainSurface.CONSOLE
-        currentConsoleChannel = ConsoleChannel.EXECUTION
+        clearPendingAutoExecutionAfterSpeech()
         setLoading(true)
         lifecycleScope.launch {
             runCatching {
@@ -1561,6 +1783,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startPreparing() {
+        clearPendingAutoExecutionAfterSpeech()
         currentSurface = MainSurface.CONSOLE
         currentConsoleChannel = ConsoleChannel.ALL
         lifecycleScope.launch {

@@ -1,5 +1,9 @@
 package com.atombits.pocopaw
 
+import android.animation.ObjectAnimator
+import android.animation.PropertyValuesHolder
+import android.animation.ValueAnimator
+import android.content.res.ColorStateList
 import android.widget.FrameLayout
 import android.text.SpannableStringBuilder
 import android.text.Spanned
@@ -7,7 +11,10 @@ import android.text.method.LinkMovementMethod
 import android.text.style.URLSpan
 import android.view.Gravity
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
+import android.view.animation.AccelerateDecelerateInterpolator
+import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
@@ -23,6 +30,8 @@ class ChatAdapter(
     private val actionListener: MessageActionListener? = null
 ) : ListAdapter<ChatMessage, ChatAdapter.MessageViewHolder>(DiffCallback) {
 
+    private var speakingMessageId: String? = null
+
     interface MessageActionListener {
         fun onSpeakMessage(message: ChatMessage)
         fun onCopyMessage(message: ChatMessage)
@@ -34,8 +43,34 @@ class ChatAdapter(
         return MessageViewHolder(binding, actionListener)
     }
 
+    fun setSpeakingMessageId(messageId: String?) {
+        if (speakingMessageId == messageId) {
+            return
+        }
+        val previousMessageId = speakingMessageId
+        speakingMessageId = messageId
+        notifyMessageChanged(previousMessageId)
+        notifyMessageChanged(messageId)
+    }
+
+    private fun notifyMessageChanged(messageId: String?) {
+        if (messageId.isNullOrBlank()) {
+            return
+        }
+        val index = currentList.indexOfFirst { message -> message.id == messageId }
+        if (index >= 0) {
+            notifyItemChanged(index)
+        }
+    }
+
     override fun onBindViewHolder(holder: MessageViewHolder, position: Int) {
-        holder.bind(getItem(position))
+        val message = getItem(position)
+        holder.bind(message, isSpeaking = message.id == speakingMessageId)
+    }
+
+    override fun onViewRecycled(holder: MessageViewHolder) {
+        holder.recycle()
+        super.onViewRecycled(holder)
     }
 
     class MessageViewHolder(
@@ -44,8 +79,9 @@ class ChatAdapter(
     ) : RecyclerView.ViewHolder(binding.root) {
 
         private val formatter = SimpleDateFormat("HH:mm", Locale.getDefault())
+        private var speakButtonAnimator: ObjectAnimator? = null
 
-        fun bind(message: ChatMessage) {
+        fun bind(message: ChatMessage, isSpeaking: Boolean) {
             val context = binding.root.context
             val hasAnswer = message.content.isNotBlank()
             val goalAndPlanContent = message.goalAndPlanContent?.trim().orEmpty()
@@ -98,6 +134,7 @@ class ChatAdapter(
             binding.speakMessageButton.setOnClickListener {
                 actionListener?.onSpeakMessage(message)
             }
+            updateSpeakButtonVisual(isSpeaking)
             binding.copyMessageButton.setOnClickListener {
                 actionListener?.onCopyMessage(message)
             }
@@ -137,6 +174,43 @@ class ChatAdapter(
             }
             applyBubbleWidthPolicy(context, message.role, params)
             binding.messageCard.layoutParams = params
+        }
+
+        fun recycle() {
+            updateSpeakButtonVisual(isSpeaking = false)
+        }
+
+        private fun updateSpeakButtonVisual(isSpeaking: Boolean) {
+            val context = binding.root.context
+            speakButtonAnimator?.cancel()
+            speakButtonAnimator = null
+            binding.speakMessageButton.scaleX = 1f
+            binding.speakMessageButton.scaleY = 1f
+            binding.speakMessageButton.alpha = 1f
+            binding.speakMessageButton.imageTintList = ColorStateList.valueOf(
+                ContextCompat.getColor(
+                    context,
+                    if (isSpeaking) R.color.clay_500 else R.color.ink_900
+                )
+            )
+            binding.speakMessageButton.contentDescription = context.getString(
+                if (isSpeaking) R.string.message_action_stop_speaking else R.string.message_action_speak
+            )
+            if (!isSpeaking) {
+                return
+            }
+            speakButtonAnimator = ObjectAnimator.ofPropertyValuesHolder(
+                binding.speakMessageButton,
+                PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, 1.12f, 1f),
+                PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 1.12f, 1f),
+                PropertyValuesHolder.ofFloat(View.ALPHA, 1f, 0.55f, 1f)
+            ).apply {
+                duration = 880L
+                repeatCount = ValueAnimator.INFINITE
+                repeatMode = ValueAnimator.RESTART
+                interpolator = AccelerateDecelerateInterpolator()
+                start()
+            }
         }
 
         private fun applyBubbleContentAlignment(gravity: Int) {

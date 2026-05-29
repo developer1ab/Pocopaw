@@ -447,7 +447,7 @@ class ExploratoryAutomationRunner private constructor(
 ) : PrototypeAutomationRunner {
 
     companion object {
-        const val MAX_STEPS = 15
+        const val MAX_STEPS = 100
         const val SETTLE_MS = 1500L
         const val APP_LAUNCH_CAPTURE_SETTLE_MS = 3000L
         const val MAX_SAME_ACTION_REPEAT = 2

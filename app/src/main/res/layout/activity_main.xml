@@ -23,14 +23,35 @@
             android:layout_weight="1"
             android:orientation="vertical">
 
-            <TextView
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:fontFamily="sans-serif-medium"
-                android:maxLines="1"
-                android:text="@string/toolbar_title"
-                android:textColor="@color/ink_900"
-                android:textSize="14sp" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-medium"
+                    android:maxLines="1"
+                    android:text="@string/toolbar_title"
+                    android:textColor="@color/ink_900"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/toolbarVersionText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/bg_message_action_icon"
+                    android:includeFontPadding="false"
+                    android:paddingStart="8dp"
+                    android:paddingTop="3dp"
+                    android:paddingEnd="8dp"
+                    android:paddingBottom="3dp"
+                    android:textColor="@color/clay_500"
+                    android:textSize="11sp" />
+            </LinearLayout>
 
             <TextView
                 android:layout_width="wrap_content"

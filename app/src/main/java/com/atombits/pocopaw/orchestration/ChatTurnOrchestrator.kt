@@ -101,7 +101,7 @@ sealed interface ChatTurnSubmitResult {
 
     data class ConversationCompleted(
         val updatedStore: PrototypeStoreData,
-        val executionMessage: String?
+        val shouldAutoStartExecution: Boolean
     ) : ChatTurnSubmitResult
 
     data class Failure(
@@ -298,16 +298,10 @@ class ChatTurnOrchestrator(
                 searchEnhancementContext = searchEnhancementContext.first,
                 turnOptions = responseTurnOptions
             )
-            var executionMessage: String? = null
-            if (executionEntryOrchestrator.shouldAutoStart(updatedStore)) {
-                attemptedExecutionStart = true
-                val executionOutcome = executionEntryOrchestrator.autoStartExecution(updatedStore)
-                updatedStore = executionOutcome.updatedStore
-                executionMessage = executionOutcome.message
-            }
+            val shouldAutoStartExecution = executionEntryOrchestrator.shouldAutoStart(updatedStore)
             ChatTurnSubmitResult.ConversationCompleted(
                 updatedStore = updatedStore,
-                executionMessage = executionMessage
+                shouldAutoStartExecution = shouldAutoStartExecution
             )
         }.getOrElse { throwable ->
             logSubmitFailure(
@@ -350,7 +344,7 @@ class ChatTurnOrchestrator(
                 role = MessageRole.ASSISTANT,
                 content = if (turnOptions.searchEnabled) "" else buildPendingAssistantPlaceholder(turnOptions),
                 goalAndPlanContent = if (turnOptions.searchEnabled) {
-                    buildPendingAssistantPlaceholder(turnOptions)
+                    context.getString(R.string.pending_assistant_search_deciding)
                 } else {
                     null
                 },

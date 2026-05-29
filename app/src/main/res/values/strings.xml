@@ -1,5 +1,6 @@
 <resources>
     <string name="app_name">pocopaw</string>
+    <string name="toolbar_version_badge">v%1$s</string>
     <string name="toolbar_title">pocopaw</string>
     <string name="toolbar_subtitle">Semantic dialog + intent candidate sedimentation</string>
     <string name="stage_discussing">Accumulating</string>
@@ -32,6 +33,7 @@
     <string name="image_message_parse_template">[Image from %1$s]\n%2$s</string>
     <string name="image_message_parse_fallback">[Image from %1$s]\nI uploaded an image. Please proceed with analysis based on this image.</string>
     <string name="message_action_speak">Speak</string>
+    <string name="message_action_stop_speaking">Stop speaking</string>
     <string name="message_action_copy">Copy</string>
     <string name="message_action_forward">Forward</string>
     <string name="message_action_speak_empty">This message has no text to speak.</string>
@@ -340,6 +342,7 @@
     <string name="chat_option_off">Off</string>
     <string name="pending_assistant_reply">Drafting the reply...</string>
     <string name="pending_assistant_thinking">Thinking through the request...</string>
+    <string name="pending_assistant_search_deciding">Quickly deciding whether search is needed...</string>
     <string name="pending_assistant_search">Preparing the search-enhanced reply...</string>
     <string name="pending_assistant_thinking_search">Thinking through the request and preparing the search chain...</string>
     <string name="process_review_title">Execution review</string>

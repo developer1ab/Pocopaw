@@ -1,5 +1,6 @@
 <resources>
     <string name="app_name">pocopaw</string>
+    <string name="toolbar_version_badge">v%1$s</string>
     <string name="toolbar_title">pocopaw</string>
     <string name="toolbar_subtitle">语义对话 + 意图候选沉淀</string>
     <string name="stage_discussing">累积中</string>
@@ -333,6 +334,7 @@
     <string name="chat_option_off">关</string>
     <string name="pending_assistant_reply">正在起草回复...</string>
     <string name="pending_assistant_thinking">正在思考请求...</string>
+    <string name="pending_assistant_search_deciding">快速判断中...</string>
     <string name="pending_assistant_search">正在准备增强搜索的回复...</string>
     <string name="pending_assistant_thinking_search">正在思考请求并准备搜索链...</string>
     <string name="process_review_title">执行复盘</string>

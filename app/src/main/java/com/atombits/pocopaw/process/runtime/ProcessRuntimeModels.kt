@@ -48,7 +48,7 @@ data class ProcessRuntimeState(
     val taskContextId: String? = null,
     val status: ProcessRuntimeStatus = ProcessRuntimeStatus.IDLE,
     val currentStep: Int = 0,
-    val maxSteps: Int = 25,
+    val maxSteps: Int = 100,
     val lastActionFingerprint: String? = null,
     val sameActionRepeatCount: Int = 0,
     val matchedReadyAssetId: String? = null,
