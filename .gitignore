@@ -18,13 +18,20 @@ local.properties
 /.vscode/
 
 # Local-only working documents and release-unrelated artifacts
-/docs/
+/docs/*
 /logs/
 /root-temp/
 /prototypedev/
-/scripts/
-/tools/
+/scripts/*
+/tools/*
 /shizukuprobe/
+
+# Keep canonical debug capture workflow under version control
+!/docs/debug_capture_standard.md
+!/scripts/system-debug-capture.js
+!/scripts/lib/
+!/scripts/lib/utils.js
+!/tools/system_debug_capture.ps1
 
 # Local debug outputs
 /temp_*

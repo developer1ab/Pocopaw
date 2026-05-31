@@ -22,3 +22,12 @@ This workspace is the Android popopaw app. Keep guidance minimal and anchored to
 - Run the narrowest affected unit test first with `.\gradlew :app:testDebugUnitTest --tests "..."`
 - Run `.\gradlew :app:testDebugUnitTest` for broader Kotlin logic changes
 - Run `.\gradlew :app:assembleDebug` for Gradle, manifest, resource, or UI-surface changes
+
+## Debug Capture Protocol
+
+- When entering a runtime/device debug phase, always start with standardized capture scripts before ad hoc shell probing.
+- Default capture entrypoint: `.\tools\debug_capture_preset.ps1 -Target <oppo|samsung> -Minutes 10 -NoScreenshot`
+- If a raw serial is required, use: `.\tools\system_debug_capture_and_open.ps1 -Device <SERIAL> -AppId com.atombits.pocopaw -Minutes 10 -NoScreenshot`
+- Prefer VS Code tasks `capture-oppo-standard-10min` or `capture-samsung-standard-10min` when available.
+- Only fall back to manual `adb/logcat` command-by-command experiments if the standard capture command fails, and report that failure reason first.
+- Triage order after capture: `summary_*.txt` -> `prototype_store_*.json` -> `logcat_filtered_*.txt` -> `ui_dump/screenshot` (when enabled).
