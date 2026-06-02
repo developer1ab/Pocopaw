@@ -62,6 +62,17 @@ internal data class ImeAffordanceSnapshot(
     val clickable: Boolean = false
 )
 
+data class AccessibilityScreenTextSnapshot(
+    val packageName: String?,
+    val rootClassName: String?,
+    val windowBounds: String,
+    val textLines: List<String>,
+    val sourceScreenSignature: String
+) {
+    val joinedText: String
+        get() = textLines.joinToString("\n")
+}
+
 internal data class ImeAffordanceEvaluation(
     val score: Int,
     val reason: String
@@ -392,6 +403,29 @@ class PrototypeAccessibilityService : AccessibilityService(), AutomationDeviceCo
         }
     }
 
+    fun captureScreenTextSnapshot(maxNodes: Int = 250): AccessibilityScreenTextSnapshot? {
+        val root = rootInActiveWindow ?: return null
+        val rootBounds = Rect()
+        root.getBoundsInScreen(rootBounds)
+        val lines = mutableListOf<String>()
+        collectScreenTextLines(root, lines, visitedCount = 0, maxNodes = maxNodes)
+        val packageName = root.packageName?.toString()
+        val rootClassName = root.className?.toString()
+        val windowBounds = "[${rootBounds.left},${rootBounds.top}][${rootBounds.right},${rootBounds.bottom}]"
+        val signature = listOf(packageName.orEmpty(), rootClassName.orEmpty(), windowBounds, lines.take(120).joinToString("|"))
+            .joinToString("|")
+            .hashCode()
+            .toUInt()
+            .toString(16)
+        return AccessibilityScreenTextSnapshot(
+            packageName = packageName,
+            rootClassName = rootClassName,
+            windowBounds = windowBounds,
+            textLines = lines.distinct().take(200),
+            sourceScreenSignature = signature
+        )
+    }
+
     private suspend fun dispatchGesture(path: Path, durationMs: Long): Boolean = suspendCancellableCoroutine { continuation ->
         val gesture = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(path, 0, durationMs.coerceAtLeast(1L)))
@@ -427,6 +461,52 @@ class PrototypeAccessibilityService : AccessibilityService(), AutomationDeviceCo
             realWidth = metrics.widthPixels,
             realHeight = metrics.heightPixels
         )
+    }
+
+    private fun collectScreenTextLines(
+        node: AccessibilityNodeInfo,
+        lines: MutableList<String>,
+        visitedCount: Int,
+        maxNodes: Int
+    ): Int {
+        if (visitedCount >= maxNodes) {
+            return visitedCount
+        }
+        var visited = visitedCount + 1
+        val bounds = Rect()
+        node.getBoundsInScreen(bounds)
+        val text = node.text?.toString()?.trim().orEmpty()
+        val description = node.contentDescription?.toString()?.trim().orEmpty()
+        val label = listOf(text, description)
+            .filter { value -> value.isNotBlank() }
+            .distinct()
+            .joinToString(" | ")
+            .trim()
+        if (label.isNotBlank()) {
+            lines += buildString {
+                append(label)
+                append(" @[")
+                append(bounds.left)
+                append(',')
+                append(bounds.top)
+                append("][")
+                append(bounds.right)
+                append(',')
+                append(bounds.bottom)
+                append(']')
+                if (node.isClickable) {
+                    append(" clickable")
+                }
+            }
+        }
+        for (index in 0 until node.childCount) {
+            if (visited >= maxNodes) {
+                return visited
+            }
+            val child = node.getChild(index) ?: continue
+            visited = collectScreenTextLines(child, lines, visited, maxNodes)
+        }
+        return visited
     }
 
     private fun getActiveWindowInfo(): String {

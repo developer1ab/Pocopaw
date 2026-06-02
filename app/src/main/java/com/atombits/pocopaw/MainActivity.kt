@@ -35,6 +35,8 @@ import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.atombits.pocopaw.databinding.ActivityMainBinding
+import com.atombits.pocopaw.earnings.buildAndroidEarningsHubStoreController
+import com.atombits.pocopaw.earnings.earningsHubOrDefault
 import com.atombits.pocopaw.orchestration.ChatTurnOrchestrator
 import com.atombits.pocopaw.orchestration.ChatTurnSubmitResult
 import com.atombits.pocopaw.orchestration.ExecutionEntryOrchestrator
@@ -141,6 +143,14 @@ class MainActivity : AppCompatActivity() {
                 toolspaceCatalogManager = toolspaceCatalogManager,
                 screenCaptureManager = screenCaptureManager
             )
+        )
+    }
+    private val earningsHubStoreController by lazy(LazyThreadSafetyMode.NONE) {
+        buildAndroidEarningsHubStoreController(
+            context = applicationContext,
+            prototypeStore = prototypeStore,
+            toolspaceCatalogManager = toolspaceCatalogManager,
+            screenCaptureManager = screenCaptureManager
         )
     }
     private val chatTurnOrchestrator by lazy(LazyThreadSafetyMode.NONE) {
@@ -759,6 +769,18 @@ class MainActivity : AppCompatActivity() {
         }
         binding.runPreferenceDiscoveryButton.setOnClickListener {
             runPreferenceDiscovery()
+        }
+        binding.runEarningsScanButton.setOnClickListener {
+            runEarningsScanOnly()
+        }
+        binding.compileEarningsPlanButton.setOnClickListener {
+            compileEarningsPlanFromCurrentScan()
+        }
+        binding.toggleEarningsAutomationButton.setOnClickListener {
+            toggleEarningsAutomation()
+        }
+        binding.runEarningsTickButton.setOnClickListener {
+            runEarningsTick()
         }
         binding.runPreferenceExtractionButton.setOnClickListener {
             runPreferenceExtraction()
@@ -1793,6 +1815,98 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun runEarningsScanOnly() {
+        if (PrototypeAccessibilityService.instance == null) {
+            render(storeData)
+            Snackbar.make(binding.root, getString(R.string.accessibility_service_not_connected), Snackbar.LENGTH_LONG).show()
+            startupShizukuBootstrapAttempted = false
+            maybeRunStartupShizukuBootstrap()
+            return
+        }
+        setLoading(true)
+        lifecycleScope.launch {
+            runCatching {
+                earningsHubStoreController.runFullScan()
+            }.onSuccess { result ->
+                storeData = result.updatedStore
+                render(storeData)
+                Snackbar.make(
+                    binding.root,
+                    getString(R.string.earnings_operation_completed, result.summary),
+                    Snackbar.LENGTH_SHORT
+                ).show()
+            }.onFailure { throwable ->
+                render(storeData)
+                Snackbar.make(binding.root, buildFailureMessage(throwable), Snackbar.LENGTH_LONG).show()
+            }
+            setLoading(false)
+        }
+    }
+
+    private fun compileEarningsPlanFromCurrentScan() {
+        setLoading(true)
+        lifecycleScope.launch {
+            runCatching {
+                earningsHubStoreController.compilePlanFromCurrentScan()
+            }.onSuccess { result ->
+                storeData = result.updatedStore
+                render(storeData)
+                Snackbar.make(
+                    binding.root,
+                    getString(R.string.earnings_operation_completed, result.summary),
+                    Snackbar.LENGTH_SHORT
+                ).show()
+            }.onFailure { throwable ->
+                render(storeData)
+                Snackbar.make(binding.root, buildFailureMessage(throwable), Snackbar.LENGTH_LONG).show()
+            }
+            setLoading(false)
+        }
+    }
+
+    private fun toggleEarningsAutomation() {
+        val enabled = !storeData.earningsHubOrDefault().enabled
+        setLoading(true)
+        lifecycleScope.launch {
+            runCatching {
+                earningsHubStoreController.setAutomationEnabled(enabled)
+            }.onSuccess { result ->
+                storeData = result.updatedStore
+                render(storeData)
+                Snackbar.make(
+                    binding.root,
+                    getString(R.string.earnings_operation_completed, result.summary),
+                    Snackbar.LENGTH_SHORT
+                ).show()
+            }.onFailure { throwable ->
+                render(storeData)
+                Snackbar.make(binding.root, buildFailureMessage(throwable), Snackbar.LENGTH_LONG).show()
+            }
+            setLoading(false)
+        }
+    }
+
+    private fun runEarningsTick() {
+        setLoading(true)
+        lifecycleScope.launch {
+            runCatching {
+                earningsHubStoreController.tick()
+            }.onSuccess { result ->
+                storeData = result.updatedStore
+                render(storeData)
+                Snackbar.make(
+                    binding.root,
+                    getString(R.string.earnings_operation_completed, result.summary),
+                    Snackbar.LENGTH_SHORT
+                ).show()
+            }.onFailure { throwable ->
+                render(storeData)
+                Snackbar.make(binding.root, buildFailureMessage(throwable), Snackbar.LENGTH_LONG).show()
+            }
+            setLoading(false)
+        }
+    }
+
     private fun render(store: PrototypeStoreData) {
         val runtimePreferences = store.resolveSemanticRuntimePreferences() ?: SemanticRuntimePreferences()
         val constrainedTurnOptions = coerceSemanticTurnOptions(runtimePreferences, chatTurnOptions)
@@ -1818,6 +1932,7 @@ class MainActivity : AppCompatActivity() {
         }
         binding.inputEditText.hint = getString(R.string.message_hint)
         refreshComposerActionButtons()
+        renderEarningsHub(store)
         refreshLanguageCard()
         val loading = binding.loadingRow.visibility == View.VISIBLE
         refreshConversationControlAvailability(store, loading)
@@ -1825,6 +1940,55 @@ class MainActivity : AppCompatActivity() {
         refreshSearchProviderAvailability(loading = loading)
         refreshVoiceSettingAvailability(loading)
         refreshDemoOnboardingUi(force = false)
+    }
+
+    private fun renderEarningsHub(store: PrototypeStoreData) {
+        val hub = store.earningsHubOrDefault()
+        val projection = hub.uiProjectionState
+        val nextWake = hub.executionLaneState.nextWakeAt?.let { timestamp ->
+            lastUpdatedFormatter.format(Date(timestamp))
+        } ?: "none"
+        val lastScan = hub.lastFullScanAt?.let { timestamp ->
+            lastUpdatedFormatter.format(Date(timestamp))
+        } ?: "never"
+        binding.earningsStatusText.text = buildString {
+            append("enabled=")
+            append(hub.enabled)
+            append("\nlane=")
+            append(hub.executionLaneState.laneStatus.name)
+            append("\nnextWake=")
+            append(nextWake)
+            append("\nlastScan=")
+            append(lastScan)
+            hub.executionLaneState.blockReason?.takeIf { value -> value.isNotBlank() }?.let { reason ->
+                append("\nblock=")
+                append(reason)
+            }
+        }.ifBlank { getString(R.string.earnings_status_empty) }
+        binding.earningsScanSummaryText.text = projection.scanSummaryCard
+            ?.takeIf { value -> value.isNotBlank() }
+            ?: hub.scanState.lastScanSummary
+            ?: getString(R.string.earnings_scan_empty)
+        binding.earningsQueueText.text = projection.importantQueueCards
+            .joinToString("\n")
+            .ifBlank { getString(R.string.earnings_queue_empty) }
+        val rewardLines = projection.dailyRewardSummaryCards.takeIf { cards -> cards.isNotEmpty() }
+            ?: hub.rewardLedgerState.todayByApp.map { summary ->
+                "${summary.appId.displayName}: ${summary.totalCoins} coins (${summary.successCount})"
+            }
+        binding.earningsRewardText.text = rewardLines
+            .take(6)
+            .joinToString("\n")
+            .ifBlank { getString(R.string.earnings_rewards_empty) }
+        val diagnostics = (hub.diagnosticsState.runtimeDiagnostics + hub.diagnosticsState.plannerDiagnostics.map { item ->
+            "${item.severity}: ${item.message}"
+        }).takeLast(4)
+        binding.earningsDiagnosticsText.text = diagnostics
+            .joinToString("\n")
+            .ifBlank { getString(R.string.earnings_diagnostics_empty) }
+        binding.toggleEarningsAutomationButton.text = getString(
+            if (hub.enabled) R.string.earnings_disable_automation else R.string.earnings_enable_automation
+        )
     }
 
     private fun setLoading(loading: Boolean) {
@@ -1852,6 +2016,10 @@ class MainActivity : AppCompatActivity() {
         refreshSearchProviderAvailability(loading)
         refreshVoiceSettingAvailability(loading)
         binding.runToolDiscoveryButton.isEnabled = !loading
+        binding.runEarningsScanButton.isEnabled = !loading
+        binding.compileEarningsPlanButton.isEnabled = !loading
+        binding.toggleEarningsAutomationButton.isEnabled = !loading
+        binding.runEarningsTickButton.isEnabled = !loading
         binding.runPreferenceDiscoveryButton.isEnabled = !loading
         binding.runPreferenceExtractionButton.isEnabled = !loading
         binding.runProcessExtractionButton.isEnabled = !loading

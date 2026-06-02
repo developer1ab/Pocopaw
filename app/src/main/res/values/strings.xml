@@ -144,6 +144,18 @@
     <string name="progress_signal_switch_context">Switch context</string>
     <string name="settings_panel_title">Settings and diagnostics</string>
     <string name="settings_panel_subtitle">Configure model defaults, automation readiness, and focused discovery or extraction jobs.</string>
+    <string name="earnings_hub_title">Four-app earnings hub</string>
+    <string name="earnings_run_scan">Scan</string>
+    <string name="earnings_compile_plan">Plan</string>
+    <string name="earnings_enable_automation">Enable</string>
+    <string name="earnings_disable_automation">Disable</string>
+    <string name="earnings_run_tick">Run next earnings task</string>
+    <string name="earnings_operation_completed">Earnings hub: %1$s</string>
+    <string name="earnings_status_empty">No earnings hub state yet.</string>
+    <string name="earnings_scan_empty">No four-app scan yet.</string>
+    <string name="earnings_queue_empty">No scheduled important tasks.</string>
+    <string name="earnings_rewards_empty">No confirmed rewards yet.</string>
+    <string name="earnings_diagnostics_empty">No earnings diagnostics.</string>
     <string name="settings_models_title">Models</string>
     <string name="settings_demo_token_quota_label">Demo token quota</string>
     <string name="settings_demo_token_quota_value">Used %1$d / %2$d tokens · Remaining %3$d</string>
@@ -366,6 +378,7 @@
     <string name="execution_phase_failed">FAIL</string>
     <string name="execution_phase_info">INFO</string>
     <string name="accessibility_permission_required">Accessibility permission is required before automation can continue.</string>
+    <string name="accessibility_service_not_connected">Accessibility service is not connected. Re-run Shizuku prepare or re-enable Pocopaw in Accessibility settings.</string>
     <string name="preference_discovery_summary">Scan apps to discover user preferences automatically.</string>
     <string name="preference_discovery_not_started">Discovery has not been started for this app.</string>
     <string name="settings_not_updated_yet">not updated yet</string>

@@ -184,7 +184,7 @@ class PreferenceDiscoveryManualScanRunnerTest {
             "Preference discovery updated from 3 captured page(s).",
             memoryState?.preferenceDiscoveryRuntime?.lastOutcomeMessage
         )
-        val facts = memoryState?.appScanPreferenceFacts() ?: error("missing structured preference facts")
+        val facts = memoryState?.structuredPreferenceMemory?.facts ?: error("missing structured preference facts")
         assertEquals(1, facts.size)
         assertEquals("shopping", facts.single().domain)
         assertEquals("brand", facts.single().facetKey)
@@ -252,8 +252,8 @@ class PreferenceDiscoveryManualScanRunnerTest {
 
         val normalizedStore = normalizePrototypeStoreData(outcome.updatedStore)
 
-        assertEquals(1, normalizedStore.memoryState?.appScanPreferenceFacts()?.size)
-        assertEquals(1, normalizedStore.currentMemorySlice?.memoryState?.appScanPreferenceFacts()?.size)
+        assertEquals(1, normalizedStore.memoryState?.structuredPreferenceMemory?.facts?.size)
+        assertEquals(1, normalizedStore.currentMemorySlice?.memoryState?.structuredPreferenceMemory?.facts?.size)
         assertEquals(
             "Preference discovery updated from 1 captured page(s).",
             normalizedStore.memoryState?.preferenceDiscoveryRuntime?.lastOutcomeMessage
@@ -317,8 +317,8 @@ class PreferenceDiscoveryManualScanRunnerTest {
             "Preference discovery capture failed: no valid page was captured.",
             outcome.updatedStore.memoryState?.preferenceDiscoveryRuntime?.lastOutcomeMessage
         )
-        assertTrue(outcome.updatedStore.memoryState?.appScanPreferenceFacts()?.isEmpty() == true)
-        assertTrue(outcome.updatedStore.memoryState?.appScanBiasRecords()?.isEmpty() == true)
+        assertTrue(outcome.updatedStore.memoryState?.structuredPreferenceMemory?.facts?.isEmpty() == true)
+        assertTrue(outcome.updatedStore.memoryState?.interactionBiasMemory?.allRecords()?.isEmpty() == true)
     }
 
     @Test

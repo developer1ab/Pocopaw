@@ -313,12 +313,52 @@ class PromptGovernanceTest {
 	}
 
 	@Test
+	fun buildEarningsPlanAdvicePacket_requiresCompleteOpportunityCoverage() {
+		val packet = PromptCenter.buildEarningsPlanAdvicePacket(
+			EarningsPlanAdvicePromptSpec(
+				timeAuthorityBundle = "{\"activeDateKey\":\"2026-06-02\"}",
+				opportunityBundle = """
+					{"opportunityCount":2,"items":[
+					{"appId":"douyin_lite","taskKey":"douyin_lite:daily_once:scheduled_coin_claim","category":"DAILY_ONCE","title":"领金币"},
+					{"appId":"douyin_lite","taskKey":"douyin_lite:engagement:treasure_chest","category":"FILLER_REPEATABLE_DECAY","title":"开宝箱得金币"}
+					]}
+				""".trimIndent(),
+				coverageChecklistBundle = """
+					{"importantAdviceRequiredCount":1,"importantAdviceRequiredKeys":[{"appId":"douyin_lite","taskKey":"douyin_lite:daily_once:scheduled_coin_claim"}],"fillerCandidateTaskOrderRequiredCount":1,"fillerCandidateTaskOrderRequiredKeys":[{"appId":"douyin_lite","taskKey":"douyin_lite:engagement:treasure_chest"}],"copyableRequiredResponseSkeleton":{"summary":"Schedule required items","importantAdvice":[{"appId":"douyin_lite","taskKey":"douyin_lite:daily_once:scheduled_coin_claim","plannedWindowId":null,"windowLabel":null,"recommendedRunAt":null,"priorityRank":1,"reason":"fill","riskNotes":[]}],"fillerAdvice":{"policyMode":"STATIC_ROUND_ROBIN","candidateAppOrder":["douyin_lite"],"candidateTaskOrder":[{"appId":"douyin_lite","taskKey":"douyin_lite:engagement:treasure_chest","priorityRank":1,"reason":"fill"}],"cooldownNotes":[],"riskNotes":[]},"rejectedAdvice":[],"responseNotes":[]}}
+				""".trimIndent(),
+				executionLedgerBundle = "{}",
+				rewardLedgerBundle = "{}",
+				constraintBundle = "constraints"
+			)
+		)
+
+		val systemPrompt = packet.promptMessages.first().content
+		val userPrompt = packet.promptMessages[1].content
+		assertEquals(PromptPacketType.EARNINGS_PLAN_ADVICE, packet.packetType)
+		assertTrue(systemPrompt.contains("Coverage is mandatory: importantAdvice must include every locally plannable accepted non-filler opportunity"))
+		assertTrue(systemPrompt.contains("fillerAdvice.candidateTaskOrder must contain one item for every accepted FILLER_REPEATABLE_DECAY opportunity"))
+		assertTrue(systemPrompt.contains("copy appId and taskKey exactly from the accepted opportunities bundle"))
+		assertTrue(systemPrompt.contains("Do not merge same-title filler opportunities"))
+		assertTrue(systemPrompt.contains("A task mentioned only in summary does not count as covered"))
+		assertTrue(systemPrompt.contains("Use that skeleton as the starting structure for the final JSON response"))
+		assertTrue(systemPrompt.contains("If copyableRequiredResponseSkeleton.importantAdvice is non-empty"))
+		assertTrue(packet.responseContract.contains("\"recommendedRunAt\":\"epoch_ms|null\""))
+		assertTrue(packet.activeSections.contains("coverage_checklist"))
+		assertTrue(userPrompt.contains("Required coverage checklist:"))
+		assertTrue(userPrompt.contains("importantAdviceRequiredCount"))
+		assertTrue(userPrompt.contains("fillerCandidateTaskOrderRequiredKeys"))
+		assertTrue(userPrompt.contains("copyableRequiredResponseSkeleton"))
+		assertTrue(userPrompt.contains("Start from copyableRequiredResponseSkeleton"))
+		assertTrue(userPrompt.contains("Fill structured arrays from the required coverage checklist"))
+	}
+
+	@Test
 	fun buildSemanticIntentSystemContract_namesAssistantAsXiaoZhuaZhua() {
 		val contract = PromptCenter.buildSemanticIntentSystemContract()
 
 		assertTrue(contract.contains(ASSISTANT_NAME_ZH))
 		assertTrue(contract.contains(ASSISTANT_NAME_EN))
-		assertTrue(contract.contains("never as popopaw"))
+		assertTrue(contract.contains("never as pocopaw"))
 	}
 
 	@Test
@@ -473,5 +513,95 @@ class PromptGovernanceTest {
 		assertTrue(systemPrompt.contains("visible clickable suggestion, chip, or key"))
 		assertTrue(systemPrompt.contains("IME recovery exception"))
 		assertTrue(systemPrompt.contains("visible keyboard clipboard icon"))
+	}
+
+	@Test
+	fun buildAutomationAgentPacket_requiresExactEntertainmentTitleBeforeTaskSelection() {
+		val packet = PromptCenter.buildAutomationAgentPacket(
+			AutomationQueryPromptSpec(
+				objective = "douyin_lite:daily_once:claim_daily_coins",
+				plan = "navigate douyin_lite:daily_once:claim_daily_coins",
+				step = 1,
+				executionBoundaryPacket = TaskExecutionBoundaryPacket(
+					taskId = "earnings-task",
+					taskUpdatedAt = 1L,
+					phase = TaskPhase.EXECUTING,
+					actionCode = ActionCode.NAVIGATE,
+					targetType = TargetType.APP,
+					targetKey = "douyin_lite:daily_once:claim_daily_coins",
+					targetLabel = "Douyin Lite: daily coin claim",
+					structuredDetailSlots = TaskDetailSlots(
+						domain = linkedMapOf(
+							"title" to "daily coin claim",
+							"channel" to "Douyin Lite"
+						)
+					),
+					capabilityDomain = CapabilityDomain.ENTERTAINMENT,
+					executionGateFlag = ExecutionGateFlag.READY_TO_START
+				),
+				captureWidth = 1080,
+				captureHeight = 2400
+			)
+		)
+
+		val systemPrompt = packet.promptMessages.first().content
+		val userPrompt = packet.promptMessages[1].content
+		assertTrue(systemPrompt.contains("entertainment.title slot is a hard visible-title constraint"))
+		assertTrue(systemPrompt.contains("the exact title phrase must be visibly present in that same row/card"))
+		assertTrue(systemPrompt.contains("Do not choose a merely similar task"))
+		assertTrue(userPrompt.contains("entertainment.title=daily coin claim"))
+		assertTrue(userPrompt.contains("entertainment.channel=Douyin Lite"))
+	}
+
+	@Test
+	fun buildAutomationAgentPacket_completesEntertainmentFillerOnRewardOrCooldownEvidence() {
+		val packet = PromptCenter.buildAutomationAgentPacket(
+			AutomationQueryPromptSpec(
+				objective = "douyin_lite:filler_repeatable:watch_ads_interval",
+				plan = "navigate douyin_lite:filler_repeatable:watch_ads_interval",
+				step = 8,
+				maxSteps = 15,
+				executionBoundaryPacket = TaskExecutionBoundaryPacket(
+					taskId = "earnings-filler-task",
+					taskUpdatedAt = 1L,
+					phase = TaskPhase.EXECUTING,
+					actionCode = ActionCode.NAVIGATE,
+					targetType = TargetType.APP,
+					targetKey = "douyin_lite:filler_repeatable:watch_ads_interval",
+					targetLabel = "Douyin Lite: 看广告赚金币",
+					structuredDetailSlots = TaskDetailSlots(
+						domain = linkedMapOf(
+							"title" to "看广告赚金币",
+							"task_category" to "FILLER_REPEATABLE_DECAY",
+							"run_completion_rule" to "Countdown and cooldown text are completion evidence for this run."
+						)
+					),
+					capabilityDomain = CapabilityDomain.ENTERTAINMENT,
+					reasonSummary = "Countdown and cooldown text are completion evidence for this run.",
+					executionGateFlag = ExecutionGateFlag.READY_TO_START
+				),
+				captureWidth = 1080,
+				captureHeight = 2400
+			)
+		)
+
+		val systemPrompt = packet.promptMessages.first().content
+		val userPrompt = packet.promptMessages[1].content
+		assertTrue(systemPrompt.contains("entertainment earnings filler repeatable tasks"))
+		assertTrue(systemPrompt.contains("top-right '领取成功' button"))
+		assertTrue(systemPrompt.contains("safe continuation option"))
+		assertTrue(systemPrompt.contains("safe reward-greedy policy"))
+		assertTrue(systemPrompt.contains("paid/purchase/membership/payment"))
+		assertTrue(systemPrompt.contains("return-confirmation reserve"))
+		assertTrue(systemPrompt.contains("final 2 to 3 execution steps"))
+		assertFalse(systemPrompt.contains("never chain more than one continuation"))
+		assertTrue(systemPrompt.contains("坚持退出"))
+		assertTrue(systemPrompt.contains("return flow_state=completed, action=null, and business_state=success"))
+		assertTrue(systemPrompt.contains("never tap countdown/cooldown text"))
+		assertTrue(userPrompt.contains("Step budget:"))
+		assertTrue(userPrompt.contains("current_step=8"))
+		assertTrue(userPrompt.contains("max_steps=15"))
+		assertTrue(userPrompt.contains("reserve_last_steps_for_return_confirmation=2-3"))
+		assertTrue(userPrompt.contains("Boundary note: Countdown and cooldown text are completion evidence for this run."))
 	}
 }

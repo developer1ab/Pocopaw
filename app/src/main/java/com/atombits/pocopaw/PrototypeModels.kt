@@ -1,6 +1,7 @@
 package com.atombits.pocopaw
 
 import android.content.Context
+import com.atombits.pocopaw.earnings.EarningsHubState
 import com.atombits.pocopaw.process.curation.ProcessAssetEntry
 import com.atombits.pocopaw.process.curation.ProcessAssetEvent
 import com.atombits.pocopaw.process.curation.ProcessCurationSummary
@@ -1745,6 +1746,7 @@ data class PrototypeStoreData(
     var currentState: LocalConversationState = LocalConversationState(),
     var currentMemorySlice: MemorySlice? = null,
     var memoryState: MemoryState? = MemoryState(),
+    var earningsHubState: EarningsHubState? = null,
     val processLearningMaterials: MutableList<ProcessLearningMaterial> = mutableListOf()
 )
 

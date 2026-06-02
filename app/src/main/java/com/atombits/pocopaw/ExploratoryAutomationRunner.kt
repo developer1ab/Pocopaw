@@ -2,6 +2,7 @@ package com.atombits.pocopaw
 
 import android.content.Context
 import com.atombits.pocopaw.process.runtime.ProcessExplorationLoopConfig
+import com.atombits.pocopaw.earnings.runtime.FillerCooldownTextParser
 import com.atombits.pocopaw.service.PrototypeAccessibilityService
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -20,6 +21,7 @@ data class AutomationQueryRequest(
     val objective: String,
     val plan: String,
     val step: Int,
+    val maxSteps: Int? = null,
     val selectedToolId: String?,
     val executionBoundaryPacket: TaskExecutionBoundaryPacket? = null,
     val executionBrief: String?,
@@ -179,6 +181,7 @@ internal class VisionAutomationAgentClient(
                         objective = request.objective,
                         plan = request.plan,
                         step = request.step,
+                        maxSteps = request.maxSteps,
                         selectedToolId = request.selectedToolId,
                         executionBoundaryPacket = request.executionBoundaryPacket,
                         executionBrief = request.executionBrief,
@@ -630,6 +633,7 @@ class ExploratoryAutomationRunner private constructor(
                     objective = objective,
                     plan = plan,
                     step = step,
+                    maxSteps = maxSteps,
                     selectedToolId = selectedToolId,
                     executionBoundaryPacket = boundaryPacket,
                     executionBrief = effectiveRuntimeState.toExecutionKeyInfo(),
@@ -671,6 +675,24 @@ class ExploratoryAutomationRunner private constructor(
                         note = response.error.requestedApp.ifBlank { response.message },
                             automationResponsePayload = response.rawPayload.ifBlank { null },
                             routeInfo = effectiveRuntimeState.executionResult.routeInfo
+                    )
+                )
+                return
+            }
+
+            val fillerCooldownCompletionSummary = detectFillerCooldownCompletionBeforeAction(response, boundaryPacket)
+            if (fillerCooldownCompletionSummary != null) {
+                onWriteback(
+                    buildTerminalWriteback(
+                        effectiveRuntimeState,
+                        response.copy(
+                            action = null,
+                            message = fillerCooldownCompletionSummary,
+                            flowState = AutomationFlowState.COMPLETED,
+                            businessState = AutomationBusinessState.SUCCESS,
+                            executionStatus = "ok",
+                            finalUserSummary = fillerCooldownCompletionSummary
+                        )
                     )
                 )
                 return
@@ -1104,6 +1126,74 @@ class ExploratoryAutomationRunner private constructor(
             else -> false
         }
     }
+
+    private fun detectFillerCooldownCompletionBeforeAction(
+        response: AutomationAgentResponse,
+        boundaryPacket: TaskExecutionBoundaryPacket
+    ): String? {
+        if (!boundaryPacket.isEntertainmentFillerRepeatableTask()) {
+            return null
+        }
+        val targetTitle = boundaryPacket.fillerTargetTitle() ?: return null
+        val evidenceText = response.cooldownEvidenceText()
+        if (!evidenceText.contains(targetTitle, ignoreCase = true)) {
+            return null
+        }
+        if (!evidenceText.hasExplicitFillerCooldownDuration()) {
+            return null
+        }
+        FillerCooldownTextParser.extractCooldownDelayMs(evidenceText) ?: return null
+        return "Filler target '$targetTitle' shows countdown/cooldown evidence; completing this run without executing the planner action."
+    }
+}
+
+private fun TaskExecutionBoundaryPacket.isEntertainmentFillerRepeatableTask(): Boolean {
+    if (capabilityDomain != CapabilityDomain.ENTERTAINMENT) {
+        return false
+    }
+    val taskCategory = structuredDetailSlots.domain["task_category"].orEmpty()
+    return taskCategory.equals("FILLER_REPEATABLE_DECAY", ignoreCase = true) ||
+        targetKey.contains("filler_repeatable", ignoreCase = true)
+}
+
+private fun TaskExecutionBoundaryPacket.fillerTargetTitle(): String? {
+    return structuredDetailSlots.domain["title"]
+        ?.trim()
+        ?.takeIf { value -> value.isNotBlank() }
+        ?: targetLabel
+            ?.substringAfter(':', targetLabel.orEmpty())
+            ?.trim()
+            ?.takeIf { value -> value.isNotBlank() }
+}
+
+private fun AutomationAgentResponse.cooldownEvidenceText(): String {
+    return buildList {
+        add(thought)
+        add(message)
+        add(finalUserSummary)
+        blockedContext?.let { context ->
+            add(context.reason)
+            add(context.evidence)
+            add(context.stage)
+        }
+        semanticContext?.let { context ->
+            add(context.goal)
+            add(context.expectedOutcome)
+            addAll(context.verificationSignals)
+        }
+        add(rawPayload)
+    }.filter { value -> value.isNotBlank() }.joinToString(separator = "\n")
+}
+
+private fun String.hasExplicitFillerCooldownDuration(): Boolean {
+    val normalized = lowercase(Locale.US)
+    return listOf(
+        Regex("""(?i)(countdown|cooldown|timer)[^\n.。]{0,80}\d{1,2}:[0-5]\d(?::[0-5]\d)?"""),
+        Regex("""(?i)\d{1,2}:[0-5]\d(?::[0-5]\d)?[^\n.。]{0,80}(countdown|cooldown|timer|倒计时|冷却)"""),
+        Regex("""\d{1,3}\s*分(?:钟)?\s*(?:\d{1,2}\s*秒)?\s*(?:后领|后再来|倒计时|冷却)"""),
+        Regex("""(?:倒计时|冷却)[^\n.。]{0,80}\d{1,3}\s*分(?:钟)?"""),
+        Regex("""(?i)(countdown|cooldown|timer)[^\n.。]{0,80}\d{1,3}\s*m(?:in(?:ute)?s?)?(?:\s*\d{1,2}\s*s(?:ec(?:ond)?s?)?)?""")
+    ).any { pattern -> pattern.containsMatchIn(normalized) }
 }
 
 private fun ExecutionRuntimeState.afterWriteback(writebackRecord: ExecutionWritebackRecord): ExecutionRuntimeState {

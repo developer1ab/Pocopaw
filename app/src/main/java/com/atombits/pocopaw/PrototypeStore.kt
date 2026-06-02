@@ -830,7 +830,9 @@ fun applySemanticTurn(
         semanticRuntimePreferences = store.semanticRuntimePreferences ?: SemanticRuntimePreferences(),
         currentState = resolvedCurrentState,
         currentMemorySlice = store.currentMemorySlice,
-        memoryState = store.memoryState ?: MemoryState()
+        memoryState = store.memoryState ?: MemoryState(),
+        earningsHubState = store.earningsHubState,
+        processLearningMaterials = store.processLearningMaterials.toMutableList()
     )
     val effectiveStage = normalizedSemanticTurn.stage
     val effectiveUserProgressSignal = normalizedSemanticTurn.userProgressSignal
@@ -1164,6 +1166,8 @@ fun prepareStoreForFreshLaunch(store: PrototypeStoreData): PrototypeStoreData {
         processAssetEvents = store.processAssetEvents.toMutableList(),
         semanticRuntimePreferences = store.semanticRuntimePreferences ?: SemanticRuntimePreferences(),
         memoryState = store.memoryState ?: MemoryState(),
+        earningsHubState = store.earningsHubState,
+        processLearningMaterials = store.processLearningMaterials.toMutableList(),
         currentState = currentState.copy(
             stage = ConversationStage.ACCUMULATING,
             workflowLane = WorkflowLane.PASSIVE,

@@ -358,6 +358,7 @@
     <string name="execution_phase_failed">失败</string>
     <string name="execution_phase_info">信息</string>
     <string name="accessibility_permission_required">继续自动化前需要无障碍权限。</string>
+    <string name="accessibility_service_not_connected">无障碍服务尚未连接。请重新使用 Shizuku 准备，或在无障碍设置中重新开启 Pocopaw。</string>
     <string name="preference_discovery_summary">扫描应用以自动发现用户偏好。</string>
     <string name="preference_discovery_not_started">此应用的发现尚未开始。</string>
     <string name="settings_not_updated_yet">尚未更新</string>

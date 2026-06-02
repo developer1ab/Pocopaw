@@ -201,12 +201,12 @@ class SearchAugmentationClientTest {
       )
     )
 
-    assertTrue(detail.contains("搜索查询："))
+    assertTrue(detail.contains("Search queries:"))
     assertTrue(detail.contains("1. 手机A 评测"))
     assertTrue(detail.contains("2. 手机B 评测"))
-    assertTrue(detail.contains("核验范围：价格、续航、拍照"))
-    assertTrue(detail.contains("- 手机A 评测：优先看到 Alpha review、Battery comparison"))
-    assertTrue(detail.contains("- 手机B 评测：优先看到 Camera comparison"))
+    assertTrue(detail.contains("Validation scope: 价格, 续航, 拍照"))
+    assertTrue(detail.contains("- 手机A 评测: Top hits Alpha review, Battery comparison"))
+    assertTrue(detail.contains("- 手机B 评测: Top hits Camera comparison"))
   }
 
   @Test
@@ -217,8 +217,8 @@ class SearchAugmentationClientTest {
       failureMessage = "Search augmentation failed: no web results were returned."
     )
 
-    assertTrue(detail.contains("搜索查询："))
-    assertTrue(detail.contains("核验范围：续航"))
-    assertTrue(detail.contains("搜索状态：Search augmentation failed: no web results were returned."))
+    assertTrue(detail.contains("Search queries:"))
+    assertTrue(detail.contains("Validation scope: 续航"))
+    assertTrue(detail.contains("Search status: Search augmentation failed: no web results were returned."))
   }
 }

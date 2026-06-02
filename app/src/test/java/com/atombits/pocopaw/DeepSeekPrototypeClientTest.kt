@@ -6,7 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.json.JSONObject
 
-class SemanticPrototypeClientTest {
+class DeepSeekPrototypeClientTest {
 
 		@Test
 		fun parseSearchPlanResponse_extractsGoalProcessQueriesAndScope() {

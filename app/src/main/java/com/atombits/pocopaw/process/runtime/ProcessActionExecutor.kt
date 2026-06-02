@@ -16,7 +16,7 @@ data class ProcessExplorationLoopConfig(
     companion object {
         fun design9(): ProcessExplorationLoopConfig {
             return ProcessExplorationLoopConfig(
-                maxSteps = 100,
+                maxSteps = 15,
                 settleMs = 1500L,
                 maxSameActionRepeat = 2
             )
@@ -24,7 +24,7 @@ data class ProcessExplorationLoopConfig(
 
         fun prototypeCurrent(): ProcessExplorationLoopConfig {
             return ProcessExplorationLoopConfig(
-                maxSteps = 100,
+                maxSteps = 15,
                 settleMs = 1500L,
                 maxSameActionRepeat = 2
             )

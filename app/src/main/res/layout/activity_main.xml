@@ -935,6 +935,123 @@
                 </com.google.android.material.card.MaterialCardView>
 
                 <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/earningsHubCard"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    app:cardBackgroundColor="@color/panel_0"
+                    app:cardCornerRadius="20dp"
+                    app:cardElevation="0dp"
+                    app:strokeColor="@color/sand_100"
+                    app:strokeWidth="1dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="14dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="sans-serif-medium"
+                            android:text="@string/earnings_hub_title"
+                            android:textColor="@color/ink_900"
+                            android:textSize="12sp" />
+
+                        <TextView
+                            android:id="@+id/earningsStatusText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:lineSpacingExtra="2dp"
+                            android:textColor="@color/ink_900"
+                            android:textSize="12sp" />
+
+                        <TextView
+                            android:id="@+id/earningsScanSummaryText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:lineSpacingExtra="2dp"
+                            android:textColor="@color/slate_500"
+                            android:textSize="11sp" />
+
+                        <TextView
+                            android:id="@+id/earningsQueueText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:lineSpacingExtra="2dp"
+                            android:textColor="@color/ink_900"
+                            android:textSize="11sp" />
+
+                        <TextView
+                            android:id="@+id/earningsRewardText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:lineSpacingExtra="2dp"
+                            android:textColor="@color/ink_900"
+                            android:textSize="11sp" />
+
+                        <TextView
+                            android:id="@+id/earningsDiagnosticsText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:lineSpacingExtra="2dp"
+                            android:textColor="@color/slate_500"
+                            android:textSize="11sp" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:orientation="horizontal">
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/runEarningsScanButton"
+                                style="@style/AppButton.Fixed"
+                                android:layout_width="0dp"
+                                android:layout_height="44dp"
+                                android:layout_weight="1"
+                                android:text="@string/earnings_run_scan"
+                                app:backgroundTint="@color/clay_500" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/compileEarningsPlanButton"
+                                style="@style/AppButton.Fixed"
+                                android:layout_width="0dp"
+                                android:layout_height="44dp"
+                                android:layout_marginStart="8dp"
+                                android:layout_weight="1"
+                                android:text="@string/earnings_compile_plan"
+                                app:backgroundTint="@color/warning_500" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/toggleEarningsAutomationButton"
+                                style="@style/AppButton.Fixed"
+                                android:layout_width="0dp"
+                                android:layout_height="44dp"
+                                android:layout_marginStart="8dp"
+                                android:layout_weight="1"
+                                android:text="@string/earnings_enable_automation"
+                                app:backgroundTint="@color/moss_500" />
+                        </LinearLayout>
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/runEarningsTickButton"
+                            style="@style/AppButton.Fixed"
+                            android:layout_width="match_parent"
+                            android:layout_height="44dp"
+                            android:layout_marginTop="8dp"
+                            android:text="@string/earnings_run_tick"
+                            app:backgroundTint="@color/slate_500" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"

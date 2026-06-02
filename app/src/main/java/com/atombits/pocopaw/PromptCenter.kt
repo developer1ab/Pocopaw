@@ -333,6 +333,7 @@ enum class PromptPacketType {
     EXECUTION_CHAT_REPLY,
     AUTOMATION_QUERY,
     VISION_QUERY,
+    EARNINGS_PLAN_ADVICE,
     PROACTIVE_TURN,
     PROCESS_CURATION_QUERY,
     PROCESS_REFERENCE_SELECTION_QUERY,
@@ -418,6 +419,7 @@ data class AutomationQueryPromptSpec(
     val objective: String,
     val plan: String,
     val step: Int,
+    val maxSteps: Int? = null,
     val selectedToolId: String? = null,
     val executionBoundaryPacket: TaskExecutionBoundaryPacket? = null,
     val executionBrief: String? = null,
@@ -462,6 +464,15 @@ data class ExecutionChatReplyPromptSpec(
     val factsBundle: String,
     val recentConversationLines: String = "No recent user-visible conversation.",
     val stageLabel: String = "ACCUMULATING"
+)
+
+data class EarningsPlanAdvicePromptSpec(
+    val timeAuthorityBundle: String,
+    val opportunityBundle: String,
+    val coverageChecklistBundle: String = "No coverage checklist attached yet.",
+    val executionLedgerBundle: String,
+    val rewardLedgerBundle: String,
+    val constraintBundle: String
 )
 
 object TokenBudgetPlanner {
@@ -533,6 +544,15 @@ object TokenBudgetPlanner {
             inputHardCap = 1100,
             outputTarget = 180,
             requestMaxTokens = 420
+        )
+    }
+
+    fun earningsPlanAdviceBudget(): PromptTokenBudget {
+        return PromptTokenBudget(
+            inputTarget = 12000,
+            inputHardCap = 24000,
+            outputTarget = 1400,
+            requestMaxTokens = 3200
         )
     }
 
@@ -745,6 +765,16 @@ object ResponseContractRegistry {
     fun executionChatReplyContract(): String {
         return "{\"assistant_reply\":\"string\"}"
     }
+
+    fun earningsPlanAdviceContract(): String {
+        return "{" +
+            "\"summary\":\"string\"," +
+            "\"importantAdvice\":[{\"appId\":\"douyin_lite|fanqie|hongguo|toutiao_lite\",\"taskKey\":\"string\",\"plannedWindowId\":\"string|null\",\"windowLabel\":\"string|null\",\"recommendedRunAt\":\"epoch_ms|null\",\"priorityRank\":1,\"reason\":\"string\",\"riskNotes\":[\"string\"]}]," +
+            "\"fillerAdvice\":{\"policyMode\":\"STATIC_ROUND_ROBIN|DYNAMIC_REWARD_AWARE\",\"candidateAppOrder\":[\"douyin_lite|fanqie|hongguo|toutiao_lite\"],\"candidateTaskOrder\":[{\"appId\":\"douyin_lite|fanqie|hongguo|toutiao_lite\",\"taskKey\":\"string\",\"priorityRank\":1,\"reason\":\"string\"}],\"cooldownNotes\":[\"string\"],\"riskNotes\":[\"string\"]}," +
+            "\"rejectedAdvice\":[{\"appId\":\"douyin_lite|fanqie|hongguo|toutiao_lite\",\"taskKey\":\"string\",\"reason\":\"string\"}]," +
+            "\"responseNotes\":[\"string\"]" +
+            "}"
+    }
 }
 
 object PromptCenter {
@@ -764,6 +794,80 @@ object PromptCenter {
 
     fun buildSemanticTurnPacket(spec: SemanticTurnPromptSpec): PromptPacket {
         return IntentPromptPacketBuilder.buildSemanticTurnPacket(spec)
+    }
+
+    fun buildEarningsPlanAdvicePacket(spec: EarningsPlanAdvicePromptSpec): PromptPacket {
+        val tokenBudget = TokenBudgetPlanner.earningsPlanAdviceBudget()
+        val opportunityBundle = clipEarningsPlanBundle(spec.opportunityBundle, 18000)
+        val coverageChecklistBundle = clipEarningsPlanBundle(spec.coverageChecklistBundle, 8000)
+        val executionLedgerBundle = clipEarningsPlanBundle(spec.executionLedgerBundle, 5000)
+        val rewardLedgerBundle = clipEarningsPlanBundle(spec.rewardLedgerBundle, 5000)
+        val constraintBundle = clipEarningsPlanBundle(spec.constraintBundle, 3000)
+        val systemPrompt = buildString {
+            appendLine("Four-app earnings plan advice packet. Return strict JSON only.")
+            appendLine("You provide scheduling advice only; local code is the final authority for plannedRunAt, finalScore, task admission, completion, cooldown, windows, and persistence.")
+            appendLine("Use only accepted opportunities and ledger facts provided below. Do not invent tasks, rewards, app ids, task keys, windows, cooldowns, or completion state.")
+            appendLine("Never recommend rejected, blacklisted, game, finance, paid, creator/live, cross-app, or out-of-scope tasks.")
+            appendLine("Important tasks may receive candidate ordering, recommended run time, reason, and risk notes. Filler tasks may receive app/task rotation advice only.")
+            appendLine("Coverage is mandatory: importantAdvice must include every locally plannable accepted non-filler opportunity unless you put that exact appId/taskKey in rejectedAdvice with a concrete ledger/window reason.")
+            appendLine("Coverage is mandatory: fillerAdvice.candidateTaskOrder must contain one item for every accepted FILLER_REPEATABLE_DECAY opportunity.")
+            appendLine("For every advice item, copy appId and taskKey exactly from the accepted opportunities bundle. Do not shorten, rename, normalize, translate, or infer task keys.")
+            appendLine("Do not merge same-title filler opportunities. If two accepted filler opportunities share a title but have different taskKey values, return both taskKey values as separate candidateTaskOrder items.")
+            appendLine("The coverage checklist is authoritative for required structured output. A task mentioned only in summary does not count as covered.")
+            appendLine("The checklist includes copyableRequiredResponseSkeleton. Use that skeleton as the starting structure for the final JSON response.")
+            appendLine("Preserve every skeleton importantAdvice item and every skeleton fillerAdvice.candidateTaskOrder item unless you move the exact appId/taskKey to rejectedAdvice with a concrete ledger/window reason.")
+            appendLine("You may fill or adjust priorityRank, recommendedRunAt, reason, and riskNotes, but must not remove or rename skeleton appId/taskKey values.")
+            appendLine("If copyableRequiredResponseSkeleton.importantAdvice is non-empty, your final top-level importantAdvice array must be non-empty and include those exact appId/taskKey pairs.")
+            appendLine("If importantAdviceRequiredCount is greater than zero, importantAdvice must contain at least that many matching appId/taskKey items. If fillerCandidateTaskOrderRequiredCount is greater than zero, fillerAdvice.candidateTaskOrder must contain at least that many matching appId/taskKey items.")
+            appendLine("Always reply with valid JSON in this exact response contract:")
+            append(ResponseContractRegistry.earningsPlanAdviceContract())
+        }.trim()
+        val userPrompt = buildString {
+            appendLine("Time authority:")
+            appendLine(spec.timeAuthorityBundle.trim())
+            appendLine()
+            appendLine("Accepted opportunities:")
+            appendLine(opportunityBundle)
+            appendLine()
+            appendLine("Required coverage checklist:")
+            appendLine(coverageChecklistBundle)
+            appendLine()
+            appendLine("Execution ledger summary:")
+            appendLine(executionLedgerBundle)
+            appendLine()
+            appendLine("Reward ledger summary:")
+            appendLine(rewardLedgerBundle)
+            appendLine()
+            appendLine("Planning constraints:")
+            appendLine(constraintBundle)
+            appendLine()
+            append("Return advice for today's plan. Start from copyableRequiredResponseSkeleton and preserve its required appId/taskKey entries. Fill structured arrays from the required coverage checklist: importantAdvice for every importantAdviceRequiredKeys item, and fillerAdvice.candidateTaskOrder for every fillerCandidateTaskOrderRequiredKeys item. Use the exact appId and taskKey strings from the checklist.")
+        }.trim()
+        return PromptPacket(
+            packetType = PromptPacketType.EARNINGS_PLAN_ADVICE,
+            systemContract = "Four-app earnings plan advice packet.",
+            historyBundle = spec.timeAuthorityBundle.trim(),
+            activeCandidateBundle = opportunityBundle,
+            memoryBundle = null,
+            personalizationBundle = null,
+            toolBundle = null,
+            executionBrief = null,
+            responseContract = ResponseContractRegistry.earningsPlanAdviceContract(),
+            tokenBudget = tokenBudget,
+            activeSections = listOf("system_contract", "time_authority", "accepted_opportunities", "coverage_checklist", "execution_ledger", "reward_ledger", "planning_constraints", "response_contract"),
+            promptMessages = listOf(
+                PromptMessage(role = "system", content = systemPrompt),
+                PromptMessage(role = "user", content = userPrompt)
+            )
+        )
+    }
+
+    private fun clipEarningsPlanBundle(value: String, maxChars: Int): String {
+        val normalized = value.trim()
+        if (normalized.length <= maxChars) {
+            return normalized
+        }
+        return normalized.take(maxChars).trimEnd() + "\n[truncated_by_earnings_plan_prompt max_chars=$maxChars]"
     }
 
     fun buildProactiveTurnPacket(spec: ProactiveTurnPromptSpec): PromptPacket {
@@ -991,6 +1095,10 @@ object PromptCenter {
             appendLine("17a. Preserve explicit parameter values from authoritative resolved slots across UI actions. Do not paraphrase, embellish, translate, or silently substitute them unless the UI itself requires a mechanical normalization.")
             appendLine("17b. Constraint monotonicity principle: each execution action must preserve, refine, or explicitly decompose active task constraints; never silently replace a more specific constraint set with a broader projection.")
             appendLine("17c. When choosing text for an editable field, use the highest-specificity expression compatible with that field. A broad category or partial value is allowed only when the response explicitly keeps the omitted constraints pending for a visible filter, verification, or later step.")
+            appendLine("17d. For entertainment or earnings task-center selection, an authoritative entertainment.title slot is a hard visible-title constraint: before tapping a task row, card, or task button, the exact title phrase must be visibly present in that same row/card. Do not choose a merely similar task, adjacent task, same-reward task, same-streak task, or inferred synonym; if the exact title is not visible, keep looking/scrolling within scope or fail instead of tapping another task.")
+            appendLine("17e. For entertainment earnings filler repeatable tasks, reward claimed/confirmed screens, dismissed reward modals, return to the task center with the exact target row/card showing countdown/cooldown text, or recent history showing the target reward was accepted and the current screen is back in Pocopaw or needs no further target action are terminal success evidence for this run. For ad/video filler, when a rewarded video ends and a reward-success control such as a top-right '领取成功' button is visible, tap it if needed to surface or resolve the post-reward continue/exit choice. If that choice offers another rewarded ad/video, bonus, or derived coin step for the same target flow, return flow_state=in_progress with a single tap on the safe continuation option while no forbidden-continuation, cooldown, explicit completion, app-boundary, return-step-reserve, max-step, or per-run video-limit boundary has been hit; otherwise tap the exit/return option such as '坚持退出'. When the reward chain reaches the task center/cooldown state, automatic return, no further safe same-flow reward path, or any boundary above, return flow_state=completed, action=null, and business_state=success; never tap countdown/cooldown text, and never wait for the cooldown to expire within the same run.")
+            appendLine("17f. For entertainment earnings execution, use a safe reward-greedy policy inside the current accepted target flow: if a visible continuation, bonus, extra ad/video, or derived coin step clearly belongs to the current target flow and offers more coins/reward, continue while it stays inside the same app/task context and within step/video limits. This does not permit choosing another task-center item, expanding the candidate pool, or relaxing the exact visible-title rule for task row/card selection. Never continue into paid/purchase/membership/payment, finance/loan/credit/cash-withdrawal, games/mini-games, creator/upload/live-streaming, social invite/contact, coupon/identity, download/install, cross-app, cross-content-domain, or manually blacklisted paths; choose safe exit/return or fail instead.")
+            appendLine("17g. Entertainment earnings precedence: safety and forbidden-path boundaries outrank all reward seeking; exact target/app/title constraints and hard max-step limits remain mandatory; within those boundaries, the reward-greedy rule and the return-confirmation reserve supersede older one-continuation limits or instructions to consume all available steps. Preserve the final 2 to 3 execution steps for exit, return, and confirmation actions instead of starting optional extra reward continuations.")
             appendLine("Additional routing rule: when process guidance specifies a required business entry path or process_scope, treat it as the current route prior and do not replace it with a generic same-app search flow.")
             appendLine("18. Do not silently replace required parameters such as departure city, destination city, time, or explicitly named service/app.")
             appendLine("19. If the visible result conflicts with execution boundary details or verification checks, do not return completed.")
@@ -1006,6 +1114,13 @@ object PromptCenter {
             appendLine()
             appendLine("Step:")
             appendLine(spec.step.toString())
+            spec.maxSteps?.takeIf { maxSteps -> maxSteps > 0 }?.let { maxSteps ->
+                appendLine()
+                appendLine("Step budget:")
+                appendLine("current_step=${spec.step}")
+                appendLine("max_steps=$maxSteps")
+                appendLine("reserve_last_steps_for_return_confirmation=2-3")
+            }
             spec.selectedToolId?.takeIf { value -> value.isNotBlank() }?.let { selectedToolId ->
                 appendLine()
                 appendLine("Selected tool id:")
