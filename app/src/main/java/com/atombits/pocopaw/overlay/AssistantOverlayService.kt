@@ -18,6 +18,9 @@ class AssistantOverlayService : Service() {
         private const val NOTIFICATION_ID = 1001
         private const val TAG = "AssistantOverlayService"
 
+        @Volatile
+        var isRunning = false
+
         var voicePressStartBridge: (() -> Unit)? = null
         var voicePressEndBridge: (() -> Unit)? = null
         var stopSpeakingBridge: (() -> Unit)? = null
@@ -61,6 +64,7 @@ class AssistantOverlayService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        isRunning = true
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification())
         controllerInstance = AssistantOverlayController(applicationContext).also { ctrl ->
@@ -82,6 +86,7 @@ class AssistantOverlayService : Service() {
     }
 
     override fun onDestroy() {
+        isRunning = false
         controllerInstance?.hide()
         controllerInstance = null
         super.onDestroy()

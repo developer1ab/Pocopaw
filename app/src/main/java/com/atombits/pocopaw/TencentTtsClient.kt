@@ -39,10 +39,34 @@ class TencentTtsClient(
         return secretId.isNotBlank() && secretKey.isNotBlank() && region.isNotBlank()
     }
 
+    companion object {
+        const val MAX_CHARS_PER_REQUEST = 150
+    }
+
+    fun splitMp3Chunks(text: String): List<String> {
+        return splitText(text, MAX_CHARS_PER_REQUEST)
+    }
+
     fun synthesizeMp3(text: String, voiceType: Int = 101016): ByteArray {
         require(isConfigured()) { "Tencent TTS is not configured." }
         require(text.isNotBlank()) { "TTS input text is empty." }
 
+        if (text.length <= MAX_CHARS_PER_REQUEST) {
+            return synthesizeSingle(text, voiceType)
+        }
+        val chunks = splitText(text, MAX_CHARS_PER_REQUEST)
+        val allAudio = mutableListOf<ByteArray>()
+        for (chunk in chunks) {
+            allAudio.add(synthesizeSingle(chunk, voiceType))
+        }
+        val buffer = java.io.ByteArrayOutputStream()
+        for (audio in allAudio) {
+            buffer.write(audio)
+        }
+        return buffer.toByteArray()
+    }
+
+    fun synthesizeSingle(text: String, voiceType: Int): ByteArray {
         val timestamp = Instant.now().epochSecond
         val date = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.US)
             .withZone(ZoneOffset.UTC)
@@ -120,6 +144,30 @@ class TencentTtsClient(
             }
             return android.util.Base64.decode(audioBase64, android.util.Base64.DEFAULT)
         }
+    }
+
+    private fun splitText(text: String, maxChars: Int): List<String> {
+        val chunks = mutableListOf<String>()
+        var remaining = text
+        while (remaining.length > maxChars) {
+            val splitPoint = remaining.lastIndexOf('.', maxChars)
+                .takeIf { it > maxChars / 2 }
+                ?: remaining.lastIndexOf('。', maxChars)
+                    .takeIf { it > maxChars / 2 }
+                ?: remaining.lastIndexOf('！', maxChars)
+                    .takeIf { it > maxChars / 2 }
+                ?: remaining.lastIndexOf('？', maxChars)
+                    .takeIf { it > maxChars / 2 }
+                ?: remaining.lastIndexOf(' ', maxChars)
+                    .takeIf { it > maxChars / 2 }
+                ?: maxChars
+            chunks.add(remaining.substring(0, splitPoint + 1).trim())
+            remaining = remaining.substring(splitPoint + 1).trimStart()
+        }
+        if (remaining.isNotBlank()) {
+            chunks.add(remaining)
+        }
+        return chunks
     }
 
     private fun sha256Hex(input: String): String {

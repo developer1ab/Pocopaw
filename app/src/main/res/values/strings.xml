@@ -243,7 +243,7 @@
     <string name="settings_proactive_off_chat_label">Off-chat proactive</string>
     <string name="settings_preference_completion_label">Preference completion</string>
     <string name="permission_controls_title">Automation settings</string>
-    <string name="permission_controls_body">Screen capture and accessibility are execution prerequisites. Usage access unlocks third-party preference discovery.</string>
+    <string name="permission_controls_body">Screen capture and accessibility service are prerequisites for automation. Activate them to let the large model first see and then control.</string>
     <string name="settings_language_title">Language</string>
     <string name="settings_language_body">English is the baseline runtime language. Switch the full UI and runtime copy to Simplified Chinese. Technical terms such as DeepSeek, Qwen, and Shizuku stay in English.</string>
     <string name="settings_language_current_label">Current language</string>
@@ -257,7 +257,7 @@
     <string name="open_usage_access_settings">Usage access settings</string>
     <string name="request_capture_permission">Grant screen capture</string>
     <string name="settings_shizuku_title">Shizuku bootstrap</string>
-    <string name="settings_shizuku_body">Use Shizuku to prepare accessibility and screen capture prerequisites without adding a separate execution path.</string>
+    <string name="settings_shizuku_body">Using Shizuku can auto-grant accessibility and screen capture permissions, eliminating the need for manual activation.</string>
     <string name="settings_shizuku_status_label">Shizuku status</string>
     <string name="settings_shizuku_last_bootstrap_label">Last bootstrap</string>
     <string name="settings_shizuku_status_unavailable">Shizuku is not installed on this device.</string>
@@ -354,7 +354,7 @@
     <string name="chat_option_off">Off</string>
     <string name="pending_assistant_reply">Drafting the reply...</string>
     <string name="pending_assistant_thinking">Thinking through the request...</string>
-    <string name="pending_assistant_search_deciding">Quickly deciding whether search is needed...</string>
+    <string name="pending_assistant_search_deciding">Quickly deciding...</string>
     <string name="pending_assistant_search">Preparing the search-enhanced reply...</string>
     <string name="pending_assistant_thinking_search">Thinking through the request and preparing the search chain...</string>
     <string name="process_review_title">Execution review</string>

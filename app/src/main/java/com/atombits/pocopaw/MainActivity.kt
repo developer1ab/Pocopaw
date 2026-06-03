@@ -227,6 +227,10 @@ class MainActivity : AppCompatActivity() {
     private var holdToTalkAnimationFrame = 0
     private var overlayPendingStart = false
     private var pendingOverlayAutoSpeakRestore = false
+    private var cloudTtsChunks = emptyList<String>()
+    private var cloudTtsChunkIndex = 0
+    private var cloudTtsVoiceType = 101016
+    private var cloudTtsCurrentMessageId: String? = null
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -381,12 +385,8 @@ class MainActivity : AppCompatActivity() {
         if (!::binding.isInitialized) {
             return@registerForActivityResult
         }
-        val message = if (granted) {
-            getString(R.string.contacts_permission_granted)
-        } else {
-            getString(R.string.contacts_permission_denied)
-        }
-        Snackbar.make(binding.root, message, Snackbar.LENGTH_SHORT).show()
+        startupPermissionChainIndex++
+        requestNextStartupPermission()
     }
     private val recordAudioPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -394,11 +394,11 @@ class MainActivity : AppCompatActivity() {
         if (!::binding.isInitialized) {
             return@registerForActivityResult
         }
-        if (!granted) {
-            Snackbar.make(binding.root, getString(R.string.voice_input_permission_denied), Snackbar.LENGTH_SHORT).show()
-            return@registerForActivityResult
+        if (granted && isVoiceRecording) {
+            beginVoiceRecordingSession()
         }
-        beginVoiceRecordingSession()
+        startupPermissionChainIndex++
+        requestNextStartupPermission()
     }
     private val imagePickerLauncher = registerForActivityResult(
         ActivityResultContracts.GetContent()
@@ -498,7 +498,7 @@ class MainActivity : AppCompatActivity() {
         initTextToSpeech()
         registerShizukuListeners()
         RuntimeServiceStatusNotifier.addListener(runtimeServiceStatusListener)
-        ensureContactsPermissionIfNeeded()
+        ensureStartupPermissions()
         if (isExecutionReturnToPrototypeIntent(intent)) {
             currentSurface = MainSurface.CONSOLE
             currentConsoleChannel = ConsoleChannel.CONVERSATION
@@ -531,6 +531,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (AssistantOverlayService.isRunning) {
+            AssistantOverlayService.stop(this)
+            Snackbar.make(binding.root, "Assistant overlay closed", Snackbar.LENGTH_SHORT).show()
+        }
         if (::binding.isInitialized) {
             refreshSurface()
             maybeRunStartupShizukuBootstrap()
@@ -973,11 +977,35 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun ensureContactsPermissionIfNeeded() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) {
-            return
+    private var startupPermissionChainIndex = 0
+    private val startupPermissionsChain = mutableListOf<String>()
+
+    private fun ensureStartupPermissions() {
+        val pending = mutableListOf<String>()
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            pending.add(Manifest.permission.READ_CONTACTS)
         }
-        contactsPermissionLauncher.launch(Manifest.permission.READ_CONTACTS)
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            pending.add(Manifest.permission.RECORD_AUDIO)
+        }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            pending.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        startupPermissionsChain.clear()
+        startupPermissionsChain.addAll(pending)
+        startupPermissionChainIndex = 0
+        requestNextStartupPermission()
+    }
+
+    private fun requestNextStartupPermission() {
+        if (startupPermissionChainIndex >= startupPermissionsChain.size) { return }
+        val permission = startupPermissionsChain[startupPermissionChainIndex]
+        when (permission) {
+            Manifest.permission.READ_CONTACTS -> contactsPermissionLauncher.launch(permission)
+            Manifest.permission.RECORD_AUDIO -> recordAudioPermissionLauncher.launch(permission)
+            Manifest.permission.POST_NOTIFICATIONS -> notificationPermissionLauncher.launch(permission)
+        }
     }
 
     private fun submitMessage() {
@@ -1649,37 +1677,8 @@ class MainActivity : AppCompatActivity() {
                         activeSpeechUtteranceId = null
                         updateSpeakingMessage(messageId)
                         notifyOverlaySpeechPlaying(messageId)
-                        cloudTtsJob = lifecycleScope.launch {
-                            runCatching {
-                                withContext(Dispatchers.IO) {
-                                    tencentTtsClient.synthesizeMp3(
-                                        text = text,
-                                        voiceType = settings.tencentTtsVoiceType
-                                    )
-                                }
-                            }.onSuccess { audioBytes ->
-                                playCloudTtsAudio(audioBytes, messageId)
-                            }.onFailure { error ->
-                                if (error is kotlinx.coroutines.CancellationException) {
-                                    if (activeSpeechMessageId == messageId) {
-                                        clearActiveSpeechPlayback()
-                                    }
-                                    return@launch
-                                }
-                                Log.e(VOICE_DEBUG_TAG, "Cloud TTS failed", error)
-                                val reason = error.message?.takeIf { it.isNotBlank() }
-                                    ?: getString(R.string.request_failed_generic)
-                                if (activeSpeechMessageId == messageId) {
-                                    clearActiveSpeechPlayback()
-                                }
-                                Snackbar.make(
-                                    binding.root,
-                                    getString(R.string.message_action_tts_cloud_failed, reason),
-                                    Snackbar.LENGTH_SHORT
-                                ).show()
-                                maybeStartPendingAutoExecutionForCloudMessage(messageId)
-                            }
-                        }
+                        val chunks = tencentTtsClient.splitMp3Chunks(text)
+                        playCloudTtsChunks(chunks, settings, messageId)
                         return true
                     }
 
@@ -1702,6 +1701,71 @@ class MainActivity : AppCompatActivity() {
                 ).show()
                 return false
             }
+        }
+    }
+
+    private fun playCloudTtsChunks(chunks: List<String>, settings: VoiceRecognitionSettings, messageId: String) {
+        cloudTtsChunks = chunks
+        cloudTtsChunkIndex = 0
+        cloudTtsVoiceType = settings.tencentTtsVoiceType
+        cloudTtsCurrentMessageId = messageId
+        playNextCloudTtsChunk()
+    }
+
+    private fun playNextCloudTtsChunk() {
+        val messageId = cloudTtsCurrentMessageId ?: return
+        if (cloudTtsChunkIndex >= cloudTtsChunks.size) {
+            handleCloudSpeechPlaybackFinished(messageId)
+            cloudTtsCurrentMessageId = null
+            return
+        }
+        val text = cloudTtsChunks[cloudTtsChunkIndex]
+        cloudTtsChunkIndex++
+        lifecycleScope.launch(Dispatchers.IO) {
+            val audioBytes = tencentTtsClient.synthesizeSingle(text, cloudTtsVoiceType)
+            withContext(Dispatchers.Main) {
+                if (activeSpeechMessageId != messageId) return@withContext
+                playCloudTtsChunk(audioBytes, messageId)
+            }
+        }
+    }
+
+    private fun playCloudTtsChunk(audioBytes: ByteArray, messageId: String) {
+        runCatching {
+            releaseCloudTtsPlayback()
+            val file = File(cacheDir, "tts_${System.currentTimeMillis()}.mp3")
+            FileOutputStream(file).use { output -> output.write(audioBytes) }
+            cloudTtsTempFile = file
+
+            val player = MediaPlayer().apply {
+                setDataSource(file.absolutePath)
+                setOnCompletionListener { mp ->
+                    releaseCloudTtsPlayback(mp)
+                    playNextCloudTtsChunk()
+                }
+                setOnErrorListener { mp, _, _ ->
+                    releaseCloudTtsPlayback(mp)
+                    handleCloudSpeechPlaybackFinished(messageId)
+                    cloudTtsCurrentMessageId = null
+                    false
+                }
+                prepare()
+                start()
+            }
+            cloudTtsPlayer = player
+        }.onFailure { error ->
+            Log.e(VOICE_DEBUG_TAG, "Play cloud TTS audio failed", error)
+            val reason = error.message?.takeIf { it.isNotBlank() }
+                ?: getString(R.string.request_failed_generic)
+            if (activeSpeechMessageId == messageId) {
+                clearActiveSpeechPlayback()
+            }
+            Snackbar.make(
+                binding.root,
+                getString(R.string.message_action_tts_cloud_failed, reason),
+                Snackbar.LENGTH_SHORT
+            ).show()
+            maybeStartPendingAutoExecutionForCloudMessage(messageId)
         }
     }
 

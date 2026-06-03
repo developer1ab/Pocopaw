@@ -226,7 +226,7 @@
     <string name="settings_proactive_off_chat_label">聊天外主动</string>
     <string name="settings_preference_completion_label">偏好补全</string>
     <string name="permission_controls_title">自动化设置</string>
-    <string name="permission_controls_body">屏幕捕获和无障碍是执行前提。使用情况访问可解锁第三方偏好发现。</string>
+    <string name="permission_controls_body">屏幕捕获和无障碍执行是自动化执行的前提，激活后才能实现让大模型先视图后控制。</string>
     <string name="settings_language_title">语言</string>
     <string name="settings_language_body">默认运行语言为英文。可将整个界面和运行时文案切换为简体中文。DeepSeek、Qwen、Shizuku 等技术术语保持英文。</string>
     <string name="settings_language_current_label">当前语言</string>
@@ -240,7 +240,7 @@
     <string name="open_usage_access_settings">使用情况访问设置</string>
     <string name="request_capture_permission">授予屏幕捕获</string>
     <string name="settings_shizuku_title">Shizuku 引导</string>
-    <string name="settings_shizuku_body">使用 Shizuku 准备无障碍和屏幕捕获前置条件，不额外增加执行路径。</string>
+    <string name="settings_shizuku_body">使用Shizuku神器可以自动激活无障碍和屏幕截图授权，避免每次手工激活。</string>
     <string name="settings_shizuku_status_label">Shizuku 状态</string>
     <string name="settings_shizuku_last_bootstrap_label">上次引导</string>
     <string name="settings_shizuku_status_unavailable">此设备未安装 Shizuku。</string>
