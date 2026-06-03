@@ -14,7 +14,7 @@ class ShizukuBootstrapSettingsStore(context: Context) {
     )
 
     fun isAutoBootstrapEnabled(): Boolean {
-        return prefs.getBoolean(KEY_AUTO_BOOTSTRAP_ENABLED, false)
+        return prefs.getBoolean(KEY_AUTO_BOOTSTRAP_ENABLED, true)
     }
 
     fun writeAutoBootstrapEnabled(enabled: Boolean): Boolean {

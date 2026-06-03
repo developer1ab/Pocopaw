@@ -563,4 +563,6 @@
     <string name="overlay_permission_grant_button">授予悬浮窗权限</string>
     <string name="overlay_blocked_by_system">悬浮窗被系统阻止。请检查应用设置。</string>
     <string name="overlay_button">浮窗</string>
+    <string name="shizuku_download_button">下载 Shizuku</string>
+    <string name="shizuku_setup_guide">安装 Shizuku 后：\n1. 打开 Shizuku，在「无线调试」部分点击「配对」\n2. 完成配对并启动服务\n3. 看到「Shizuku 正在运行」后，返回这里点击「使用 Shizuku 准备」</string>
 </resources>

@@ -90,6 +90,8 @@ private enum class DemoOnboardingStep {
     TOOL_DISCOVERY,
     ACCESSIBILITY,
     SCREEN_CAPTURE,
+    SHIZUKU_INSTALL,
+    SHIZUKU_PREPARE,
     DONE
 }
 
@@ -833,23 +835,18 @@ class MainActivity : AppCompatActivity() {
 
     private fun bindSettingsActions() {
         binding.openAccessibilitySettingsButton.setOnClickListener {
-            if (shouldBlockDemoOnboardingAction(DemoOnboardingStep.ACCESSIBILITY)) {
-                return@setOnClickListener
-            }
-            if (!DemoReleaseControl.isOnboardingCompleted()) {
-                DemoReleaseControl.markAccessibilityOnboardingSettingsOpened()
-            }
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }
         binding.openUsageAccessSettingsButton.setOnClickListener {
             startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
         }
         binding.requestScreenCaptureButton.setOnClickListener {
-            if (shouldBlockDemoOnboardingAction(DemoOnboardingStep.SCREEN_CAPTURE)) {
-                return@setOnClickListener
-            }
             pendingCaptureLaunchTrigger = null
             screenCapturePermissionLauncher.launch(screenCaptureManager.createCaptureIntent())
+        }
+        binding.downloadShizukuButton.setOnClickListener {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/RikkaApps/Shizuku/releases"))
+            startActivity(intent)
         }
         binding.prepareWithShizukuButton.setOnClickListener {
             prepareWithShizuku()
@@ -2361,6 +2358,14 @@ class MainActivity : AppCompatActivity() {
                 applyDemoHighlightAnimation(binding.requestScreenCaptureButton)
             }
 
+            DemoOnboardingStep.SHIZUKU_INSTALL -> {
+                applyDemoHighlightAnimation(binding.downloadShizukuButton)
+            }
+
+            DemoOnboardingStep.SHIZUKU_PREPARE -> {
+                applyDemoHighlightAnimation(binding.prepareWithShizukuButton)
+            }
+
             DemoOnboardingStep.DONE -> {
                 DemoReleaseControl.markOnboardingCompleted()
                 clearDemoHighlightAnimation()
@@ -2382,6 +2387,13 @@ class MainActivity : AppCompatActivity() {
         if (!DemoReleaseControl.isScreenCaptureOnboardingCompleted()) {
             return DemoOnboardingStep.SCREEN_CAPTURE
         }
+        val snapshot = shizukuBootstrapManager.currentStatusSnapshot()
+        if (!snapshot.installed) {
+            return DemoOnboardingStep.SHIZUKU_INSTALL
+        }
+        if (!snapshot.hasLiveReadySession()) {
+            return DemoOnboardingStep.SHIZUKU_PREPARE
+        }
         return DemoOnboardingStep.DONE
     }
 
@@ -2390,9 +2402,6 @@ class MainActivity : AppCompatActivity() {
             return
         }
         if (DemoReleaseControl.isAccessibilityOnboardingCompleted()) {
-            return
-        }
-        if (!DemoReleaseControl.hasOpenedAccessibilityOnboardingSettings()) {
             return
         }
         if (!isAccessibilityServiceEnabledForDemo()) {
@@ -2431,9 +2440,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun resetDemoOnboardingButtonStyles() {
+        binding.runToolDiscoveryButton.alpha = 1f
         binding.openAccessibilitySettingsButton.alpha = 1f
         binding.requestScreenCaptureButton.alpha = 1f
-        binding.runToolDiscoveryButton.alpha = 1f
+        binding.downloadShizukuButton.alpha = 1f
+        binding.prepareWithShizukuButton.alpha = 1f
     }
 
     private fun showProviderProfileDialog() {
@@ -2946,6 +2957,17 @@ class MainActivity : AppCompatActivity() {
                 Snackbar.make(binding.root, getString(R.string.shizuku_message_capture_denied), Snackbar.LENGTH_SHORT).show()
             }
 
+            plan.status.code == ShizukuBootstrapStatusCode.READY -> {
+                Snackbar.make(binding.root, buildShizukuPlanMessage(plan.status), Snackbar.LENGTH_SHORT).show()
+                if (!DemoReleaseControl.isOnboardingCompleted()) {
+                    DemoReleaseControl.markOnboardingCompleted()
+                    currentSurface = MainSurface.CONSOLE
+                    currentConsoleChannel = ConsoleChannel.CONVERSATION
+                    render(storeData)
+                    Snackbar.make(binding.root, getString(R.string.demo_onboarding_completed), Snackbar.LENGTH_SHORT).show()
+                }
+            }
+
             plan.status.code != ShizukuBootstrapStatusCode.DISABLED -> {
                 Snackbar.make(binding.root, buildShizukuPlanMessage(plan.status), Snackbar.LENGTH_SHORT).show()
             }
@@ -2978,10 +3000,12 @@ class MainActivity : AppCompatActivity() {
         val lastStatusCode = shizukuBootstrapManager.readLastBootstrapStatusCode()
         val lastAttemptAt = shizukuBootstrapManager.readLastBootstrapAttemptAt()
         val autoPrepareEnabled = shizukuBootstrapManager.isAutoBootstrapEnabled()
-        val displayStatusCode = if (snapshot.hasLiveReadySession()) {
-            ShizukuBootstrapStatusCode.READY
-        } else {
-            lastStatusCode
+        val displayStatusCode = when {
+            snapshot.hasLiveReadySession() -> ShizukuBootstrapStatusCode.READY
+            !snapshot.installed -> ShizukuBootstrapStatusCode.SHIZUKU_UNAVAILABLE
+            !snapshot.binderAvailable || snapshot.preV11 -> ShizukuBootstrapStatusCode.SHIZUKU_BINDER_UNAVAILABLE
+            !snapshot.permissionGranted -> ShizukuBootstrapStatusCode.SHIZUKU_PERMISSION_REQUIRED
+            else -> lastStatusCode
         }
         return ShizukuSurfaceState(
             visible = true,
