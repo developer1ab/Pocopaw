@@ -459,6 +459,7 @@ internal fun normalizePrototypeStoreData(store: PrototypeStoreData, raw: String?
     )
     store.semanticRuntimePreferences = store.semanticRuntimePreferences ?: SemanticRuntimePreferences()
     store.memoryState = migrateLegacyPreferenceMemoryState(raw, store.memoryState ?: MemoryState())
+    store.assistantOverlayState = store.assistantOverlayState ?: AssistantOverlayState()
     store.syncAllSlicesFromLegacy()
     if (normalizedStage != ConversationStage.EXECUTING) {
         store.updateCurrentExecutionSession(
@@ -832,7 +833,8 @@ fun applySemanticTurn(
         currentMemorySlice = store.currentMemorySlice,
         memoryState = store.memoryState ?: MemoryState(),
         earningsHubState = store.earningsHubState,
-        processLearningMaterials = store.processLearningMaterials.toMutableList()
+        processLearningMaterials = store.processLearningMaterials.toMutableList(),
+        assistantOverlayState = store.assistantOverlayState
     )
     val effectiveStage = normalizedSemanticTurn.stage
     val effectiveUserProgressSignal = normalizedSemanticTurn.userProgressSignal
@@ -1168,6 +1170,7 @@ fun prepareStoreForFreshLaunch(store: PrototypeStoreData): PrototypeStoreData {
         memoryState = store.memoryState ?: MemoryState(),
         earningsHubState = store.earningsHubState,
         processLearningMaterials = store.processLearningMaterials.toMutableList(),
+        assistantOverlayState = store.assistantOverlayState,
         currentState = currentState.copy(
             stage = ConversationStage.ACCUMULATING,
             workflowLane = WorkflowLane.PASSIVE,

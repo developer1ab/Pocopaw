@@ -1721,6 +1721,53 @@ data class LocalConversationState(
     val lastUpdatedAt: Long = System.currentTimeMillis()
 )
 
+enum class OverlayEntryState {
+    OVERLAY_PERMISSION_MISSING,
+    OVERLAY_READY_NOT_RUNNING,
+    OVERLAY_RUNNING_COLLAPSED,
+    OVERLAY_RUNNING_EXPANDED,
+    OVERLAY_BLOCKED_BY_SYSTEM
+}
+
+enum class OverlaySurfaceMode {
+    COLLAPSED_BUBBLE,
+    EXPANDED_PANEL,
+    VOICE_CAPTURE_PENDING,
+    SPEECH_PLAYBACK_ACTIVE,
+    DIAGNOSTIC_FALLBACK
+}
+
+enum class OverlayInputMode {
+    TEXT,
+    VOICE,
+    IDLE
+}
+
+enum class OverlaySpeechState {
+    IDLE,
+    BUFFERING,
+    PLAYING,
+    PAUSED,
+    FAILED
+}
+
+data class AssistantOverlayState(
+    val entryState: OverlayEntryState = OverlayEntryState.OVERLAY_READY_NOT_RUNNING,
+    val surfaceMode: OverlaySurfaceMode = OverlaySurfaceMode.COLLAPSED_BUBBLE,
+    val inputMode: OverlayInputMode = OverlayInputMode.IDLE,
+    val draftText: String = "",
+    val lastVisibleConversationMessageIds: List<String> = emptyList(),
+    val lastVisibleExecutionSummary: String? = null,
+    val speechMirrorEnabled: Boolean = true,
+    val activeSpeechMessageId: String? = null,
+    val activeSpeechState: OverlaySpeechState = OverlaySpeechState.IDLE,
+    val boundExecutionSessionId: String? = null,
+    val lastFocusedAt: Long = 0L,
+    val lastDismissedAt: Long = 0L,
+    val lastBlockedReason: String? = null,
+    val lastUpdatedAt: Long = System.currentTimeMillis()
+)
+
 data class PrototypeStoreData(
     val messages: MutableList<ChatMessage> = mutableListOf(),
     val snapshots: MutableList<TurnSnapshot> = mutableListOf(),
@@ -1747,7 +1794,8 @@ data class PrototypeStoreData(
     var currentMemorySlice: MemorySlice? = null,
     var memoryState: MemoryState? = MemoryState(),
     var earningsHubState: EarningsHubState? = null,
-    val processLearningMaterials: MutableList<ProcessLearningMaterial> = mutableListOf()
+    val processLearningMaterials: MutableList<ProcessLearningMaterial> = mutableListOf(),
+    var assistantOverlayState: AssistantOverlayState? = AssistantOverlayState()
 )
 
 data class SemanticTurnResponse(

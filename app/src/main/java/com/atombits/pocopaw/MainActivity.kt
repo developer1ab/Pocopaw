@@ -36,6 +36,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.atombits.pocopaw.databinding.ActivityMainBinding
 import com.atombits.pocopaw.earnings.buildAndroidEarningsHubStoreController
+import com.atombits.pocopaw.overlay.AssistantOverlayService
 import com.atombits.pocopaw.earnings.earningsHubOrDefault
 import com.atombits.pocopaw.orchestration.ChatTurnOrchestrator
 import com.atombits.pocopaw.orchestration.ChatTurnSubmitResult
@@ -222,6 +223,24 @@ class MainActivity : AppCompatActivity() {
     private var recordedPcmBuffer: ByteArrayOutputStream? = null
     private var voiceRecordingStartedAtMs: Long = 0L
     private var holdToTalkAnimationFrame = 0
+    private var overlayPendingStart = false
+    private var pendingOverlayAutoSpeakRestore = false
+
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        val activity = this@MainActivity
+        if (!::binding.isInitialized) return@registerForActivityResult
+        if (granted && overlayPendingStart) {
+            overlayPendingStart = false
+            setupOverlayBridges()
+            AssistantOverlayService.start(activity)
+            Snackbar.make(binding.root, "Assistant overlay started", Snackbar.LENGTH_SHORT).show()
+        } else if (!granted) {
+            overlayPendingStart = false
+            Snackbar.make(binding.root, "Notification permission is required for the overlay service", Snackbar.LENGTH_LONG).show()
+        }
+    }
 
     private val speechInputLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -684,6 +703,92 @@ class MainActivity : AppCompatActivity() {
         cloudTtsTempFile = null
     }
 
+    private fun enterOverlayMode() {
+        if (!android.provider.Settings.canDrawOverlays(this)) {
+            Snackbar.make(binding.root, getString(R.string.overlay_permission_required), Snackbar.LENGTH_LONG).show()
+            val intent = android.content.Intent(
+                android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                android.net.Uri.parse("package:$packageName")
+            )
+            startActivity(intent)
+            return
+        }
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(
+                    this, Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                overlayPendingStart = true
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                return
+            }
+        }
+
+        setupOverlayBridges()
+        AssistantOverlayService.start(this)
+        Snackbar.make(binding.root, "Assistant overlay started", Snackbar.LENGTH_SHORT).show()
+        moveTaskToBack(true)
+    }
+
+    private fun setupOverlayBridges() {
+        AssistantOverlayService.voicePressStartBridge = {
+            AssistantOverlayService.setVoiceInputActive(true)
+            startVoiceInputFromOverlay()
+        }
+        AssistantOverlayService.voicePressEndBridge = {
+            AssistantOverlayService.setVoiceInputActive(false)
+            AssistantOverlayService.setProcessingState(true)
+            stopVoiceInputFromOverlay()
+        }
+        AssistantOverlayService.stopSpeakingBridge = {
+            AssistantOverlayService.setSpeechPlaying(false)
+            stopSpeechPlayback(false)
+        }
+        AssistantOverlayService.replaySpeakingBridge = {
+            AssistantOverlayService.setProcessingState(true)
+            replayLatestAssistantMessage()
+        }
+        AssistantOverlayService.returnToMainBridge = { returnToMainFromOverlay() }
+    }
+
+    private fun startVoiceInputFromOverlay() {
+        runOnUiThread {
+            startVoiceInput()
+        }
+    }
+
+    private fun stopVoiceInputFromOverlay() {
+        runOnUiThread {
+            val wasAutoSpeak = voiceRecognitionSettingsStore.read().autoSpeakEnabled
+            if (!wasAutoSpeak) {
+                voiceRecognitionSettingsStore.writeAutoSpeakEnabled(true)
+            }
+            pendingOverlayAutoSpeakRestore = !wasAutoSpeak
+            stopVoiceRecordingSession(cancelOnly = false)
+        }
+    }
+
+    private fun returnToMainFromOverlay() {
+        runOnUiThread {
+            AssistantOverlayService.stop(this@MainActivity)
+            AssistantOverlayService.setProcessingState(false)
+            AssistantOverlayService.setVoiceInputActive(false)
+            AssistantOverlayService.setSpeechIdle()
+            val intent = Intent(this@MainActivity, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+            }
+            startActivity(intent)
+        }
+    }
+
+    private fun replayLatestAssistantMessage() {
+        val latestMsg = storeData.messages.lastOrNull { it.role == MessageRole.ASSISTANT && it.content.isNotBlank() }
+        if (latestMsg != null) {
+            speakMessage(latestMsg)
+        }
+    }
+
     private fun stopSpeechPlayback(cancelPendingAutoExecution: Boolean) {
         val pendingStoreToStart = if (cancelPendingAutoExecution) {
             null
@@ -719,7 +824,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         binding.refreshStatusButton.setOnClickListener {
-            refreshSurface(showMessage = true)
+            enterOverlayMode()
         }
         binding.btnChannelAll.setOnClickListener { showConsoleChannel(ConsoleChannel.ALL) }
         binding.btnChannelExecution.setOnClickListener { showConsoleChannel(ConsoleChannel.EXECUTION) }
@@ -1469,6 +1574,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun notifyOverlaySpeechPlaying(messageId: String) {
+        AssistantOverlayService.setProcessingState(false)
+        AssistantOverlayService.setSpeechPlaying(true)
+    }
+
+    private fun notifyOverlaySpeechIdle() {
+        AssistantOverlayService.setSpeechPlaying(false)
+        AssistantOverlayService.setProcessingState(false)
+    }
+
     private fun speakMessage(
         message: ChatMessage,
         deferredExecutionStore: PrototypeStoreData? = null,
@@ -1504,8 +1619,10 @@ class MainActivity : AppCompatActivity() {
         if (status != TextToSpeech.SUCCESS) {
             clearPendingAutoExecutionAfterSpeech()
             clearActiveSpeechPlayback()
+            notifyOverlaySpeechIdle()
             return false
         }
+        notifyOverlaySpeechPlaying(message.id)
         return true
     }
 
@@ -1534,6 +1651,7 @@ class MainActivity : AppCompatActivity() {
                         }
                         activeSpeechUtteranceId = null
                         updateSpeakingMessage(messageId)
+                        notifyOverlaySpeechPlaying(messageId)
                         cloudTtsJob = lifecycleScope.launch {
                             runCatching {
                                 withContext(Dispatchers.IO) {
@@ -1657,6 +1775,7 @@ class MainActivity : AppCompatActivity() {
     private fun handleLocalSpeechPlaybackFinished(utteranceId: String?) {
         if (utteranceId != null && activeSpeechUtteranceId == utteranceId) {
             clearActiveSpeechPlayback()
+            notifyOverlaySpeechIdle()
         }
         maybeStartPendingAutoExecutionForUtterance(utteranceId)
     }
@@ -1664,6 +1783,7 @@ class MainActivity : AppCompatActivity() {
     private fun handleCloudSpeechPlaybackFinished(messageId: String) {
         if (activeSpeechMessageId == messageId) {
             clearActiveSpeechPlayback()
+            notifyOverlaySpeechIdle()
         }
         maybeStartPendingAutoExecutionForCloudMessage(messageId)
     }
