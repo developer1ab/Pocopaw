@@ -99,3 +99,17 @@ For the local execution chain to work well, the most important first-run surface
 - and optional Shizuku preparation.
 
 Without these, the project can still open and render product surfaces, but the execution path will be incomplete.
+
+## 7. 蒲公英分发
+
+| 项目 | 值 |
+|------|-----|
+| 应用 | https://www.pgyer.com/pocopaw-android |
+| 包名 | com.atombits.pocopaw |
+| API Key | 79bbeb1f82c2d6e35975d1110f296b11 |
+
+**命令行上传**（Windows，需用 Python）：
+
+```powershell
+python -c "import requests; r=requests.post('https://www.pgyer.com/apiv2/app/upload', files={'file': open('app/build/outputs/apk/debug/app-debug.apk', 'rb')}, data={'_api_key': '79bbeb1f82c2d6e35975d1110f296b11', 'buildUpdateDescription': '版本说明'}); print(r.json())"
+```

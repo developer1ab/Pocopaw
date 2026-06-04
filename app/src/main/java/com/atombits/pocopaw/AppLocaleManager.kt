@@ -72,7 +72,7 @@ internal object AppLocaleManager {
     }
 
     private fun readLanguage(context: Context): AppLanguage {
-        val storedLanguageTag = preferences(context).getString(KEY_LANGUAGE_TAG, AppLanguage.ENGLISH.languageTag)
+        val storedLanguageTag = preferences(context).getString(KEY_LANGUAGE_TAG, AppLanguage.SIMPLIFIED_CHINESE.languageTag)
         val language = AppLanguage.fromLanguageTag(storedLanguageTag)
         cachedLanguage = language
         return language
