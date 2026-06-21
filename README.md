@@ -14,7 +14,7 @@ Built for vision-guided mobile automation with reliable tap, swipe, text input, 
 
 On top of that is a dual-brain model: the semantic brain (big brain) handles end-to-end reasoning and orchestration, while the vision brain (small brain) executes automation actions and continuously syncs execution signals back to the big brain.
 
-Quick links: [Docs](public-docs/README.md) · [Wiki](https://github.com/developer1ab/Pocopaw/wiki) · [Showcases](public-docs/showcases/README.md) · [Install](public-docs/install-and-configure.md) · [Debug Playbook](DEBUG.md) · [Main design](public-docs/main-design.md) · [Roadmap](public-docs/roadmap.md) · [Download v1.0.1 Demo](https://github.com/developer1ab/Pocopaw/releases/tag/v1.0.1) · [License](LICENSE)
+Quick links: [Docs](public-docs/README.md) · [Wiki](https://github.com/developer1ab/Pocopaw/wiki) · [Showcases](public-docs/showcases/README.md) · [Install](public-docs/install-and-configure.md) · [Debug Playbook](DEBUG.md) · [Main design](public-docs/main-design.md) · [Roadmap](public-docs/roadmap.md) · [Discord](https://discord.com/channels/1517860263993278474/1517860264484016242) · [Download v1.0.1 Demo](https://github.com/developer1ab/Pocopaw/releases/tag/v1.0.1) · [License](LICENSE)
 
 ## Watch 3 Demo Flows
 
