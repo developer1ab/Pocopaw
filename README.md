@@ -14,7 +14,7 @@ Built for vision-guided mobile automation with reliable tap, swipe, text input, 
 
 On top of that is a dual-brain model: the semantic brain (big brain) handles end-to-end reasoning and orchestration, while the vision brain (small brain) executes automation actions and continuously syncs execution signals back to the big brain.
 
-Quick links: [Docs](public-docs/README.md) · [Roadmap](public-docs/roadmap.md) · [Discord](https://discord.com/channels/1517860263993278474/1517860264484016242) · [Demo](public-docs/showcases/README.md)
+Quick links: [Docs](public-docs/README.md) · [Roadmap](public-docs/roadmap.md) · [Discord](https://discord.com/channels/1517860263993278474/1517860264484016242) · [Demo](public-docs/showcases/README.md) · [![License: FSL-1.1-MIT](https://img.shields.io/badge/License-FSL--1.1--MIT-blue)](LICENSE)
 
 ## Watch 3 Demo Flows
 
@@ -164,12 +164,14 @@ Expand the product from a single-task execution agent into one that can decompos
 
 ## License
 
-This repository is licensed under the Business Source License 1.1 (`BUSL-1.1`).
+[![License: FSL-1.1-MIT](https://img.shields.io/badge/License-FSL--1.1--MIT-blue)](LICENSE)
+
+This repository is licensed under the Functional Source License, Version 1.1, MIT Future License (`FSL-1.1-MIT`).
 
 In practical terms:
 
-- individual developers can use the project for learning, research, evaluation, and personal projects under the license terms;
-- the Additional Use Grant also permits individual personal production use when the user is not acting for or on behalf of an organization;
-- production use by or for an organization, and commercial reuse of the Licensed Work as a product or hosted service, requires a separate commercial license from the Licensor.
+- **individual developers** can freely use Pocopaw for personal projects, learning, research, and evaluation;
+- **organizations** that want to offer Pocopaw (or a substantially similar product) as a commercial product or hosted service must obtain a commercial license from the Licensor;
+- after **2 years**, each version automatically converts to the permissive MIT license.
 
 See [LICENSE](LICENSE) for the controlling terms.
